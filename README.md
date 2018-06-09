@@ -22,3 +22,6 @@ Example directory tree:
 /switch/schaltervox/schaltervox.nro
 /switch/schaltervox/oggs/Studiopolis.ogg```
 
+
+* Run SchalterVox. It may crash after "Loading first ogg...". Run it again and it will usually work the second time.
+* When done testing, press "+" to exit the decode loop, then "+" to exit the main application loop. The playback should (but does not always, currently :/) stop immediately.
