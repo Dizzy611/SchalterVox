@@ -9,7 +9,8 @@
 void start_playback() {
 	atb = (u32 *)malloc(ATB_SIZE * sizeof(u32));
 	mutexInit(&aLock);
-	
+	mutexInit(&aStatusLock);
+	condvarInit(&aStatusCV, &aStatusLock);
 	audoutInitialize();
 	audoutStartAudioOut();
 	
