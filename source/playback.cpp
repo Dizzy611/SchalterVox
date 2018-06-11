@@ -1,3 +1,4 @@
+// This code heavily derived from vba-next-switch sound.cpp.
 #include <cstring>
 #include <switch.h>
 #include <malloc.h>
