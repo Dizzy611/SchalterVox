@@ -1,17 +1,25 @@
 # SchalterVox
-A (currently broken as hell) media player for the Nintendo Switch
+A (WORKING, but horribly unfinished) media player for the Nintendo Switch
 
 
 # Known Bugs
-* Unlistenable, stuttering playback
 * Occasionally freezes during OGG load.
-* Vorbis decode thread sometimes (but not always) disobeys signal to quit.
+* Vorbis decode thread sometimes (but not always) disobeys signal to quit. (keep hitting the "+" button if it doesn't seem to be stopping! I need to put input on its own thread)
 
+# Immediate TODO
+* Make pressing + cause an immediate stop instead of waiting for buffers to flush.
+* Play more than one song.
+* Fix resampling.
+* Tweaks to buffer sizes to improve responsiveness/decrease initial track load time.
+* Code cleanup
 
-# Things that have been tried already to fix the stuttering issue, to no real difference.
-* Increasing/decreasing the decode buffer size (and thus the amount of bytes ov_read attempts to decode at once)
-* Increasing/decreasing the individual audio buffer size (the amount of PCM bytes pushed to the Switch at once)
-* Increasing/decreasing the audio transfer buffer size (a multiple of the audio buffer size, where data is stored before being pushed to the Switch buffers)
+# Later TODO
+* Play other file types (MP3, FLAC, all modplug formats, WAV intended)
+* Ability to skip backwards/forwards in tracks (first by track, then eventually scrubbing within a track)
+* GUI
+
+# Much Later TODO
+* Video playback
 
 # How to test
 * *DOES NOT WORK ON YUZU* (Yuzu is lacking audio support atm)
