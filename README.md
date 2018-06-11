@@ -39,3 +39,20 @@ Example directory tree:
 
 * Run SchalterVox. It may crash after "Loading first ogg...". Run it again and it will usually work the second time.
 * When done testing, press "+" to exit the decode loop, then "+" to exit the main application loop. The playback should (but does not always, currently :/) stop immediately.
+
+# Credits and special thanks.
+## Credits
+SchalterVox is coded by Dylan J "Insidious611" Morrison. Portions are based on code from the libnx examples and vba-next-switch, used under the MIT and GPLv2 licenses respectively. playback.cpp in particular owes an enormous debt to vba-next-switch.
+
+## Thanks
+My thanks to the users of the ReSwitched discord for providing guidance and patience to someone who is new to Switch homebrew, modern homebrew development in general, and hasn't touched C++ in so long he's practically new to that again too. Specific thanks go to
+ * misson20000
+ * natinsula
+ * Retr0id
+
+My thanks to Lancer-X and Lachesis of the MegaZeux development team for their help with threading, thread safety, and general C++ questions.
+
+My thanks to my family, friends, and wonderful fiancee, without whom none of this would be possible or worth it.
+
+# Licensing
+SchalterVox is licensed under the GPLv3. See LICENSE for details. 
