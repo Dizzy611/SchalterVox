@@ -10,6 +10,7 @@ A (WORKING, but horribly unfinished) media player for the Nintendo Switch
 * Make pressing + cause an immediate stop instead of waiting for buffers to flush.
 * Play more than one song.
 * Fix resampling.
+* Tweaks to buffer sizes to improve responsiveness/decrease initial track load time.
 * Code cleanup
 
 # Later TODO
