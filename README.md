@@ -20,7 +20,8 @@ A (currently broken as hell) media player for the Nintendo Switch
 Example directory tree:
 ```
 /switch/schaltervox/schaltervox.nro
-/switch/schaltervox/oggs/Studiopolis.ogg```
+/switch/schaltervox/oggs/Studiopolis.ogg
+```
 
 
 * Run SchalterVox. It may crash after "Loading first ogg...". Run it again and it will usually work the second time.
