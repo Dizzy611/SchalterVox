@@ -1,6 +1,8 @@
 # SchalterVox
 A (WORKING, but horribly unfinished) media player for the Nintendo Switch
 
+# What can it do?
+It can currently play a single Ogg Vorbis file from the "oggs" directory (so e.g. `/switch/schaltervox/oggs/myogg.ogg`, which has to be 2 channels at 48000Hz (resampling is in the works but I've had some crash issues with libsamplerate). 
 
 # Known Bugs
 * Occasionally freezes during OGG load.
