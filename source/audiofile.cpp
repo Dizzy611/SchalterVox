@@ -20,6 +20,7 @@ void audioFile::playFile() {
 		vd = new vorbisdecoder(this->filename);
 		if (!vd->decoderValid) {
 			printf("ERROR: %s \n", vd->decoderError.c_str());
+			stop_playback(false);
 			return;
 		}
 		printf("Loaded vorbis file %s\n", this->filename.c_str());
