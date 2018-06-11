@@ -4,6 +4,9 @@ A (WORKING, but horribly unfinished) media player for the Nintendo Switch
 # What can it do?
 It can currently play a single Ogg Vorbis file from the "oggs" directory (so e.g. `/switch/schaltervox/oggs/myogg.ogg`, which has to be 2 channels at 48000Hz (resampling is in the works but I've had some crash issues with libsamplerate). 
 
+# SchalterVox?
+"Schalter" is "switch" in german. "Vox" is "voice" in latin. Thus, "switch voice": A voice for your switch.
+
 # Known Bugs
 * Occasionally freezes during OGG load.
 * Vorbis decode thread sometimes (but not always) disobeys signal to quit. (keep hitting the "+" button if it doesn't seem to be stopping! I need to put input on its own thread)
