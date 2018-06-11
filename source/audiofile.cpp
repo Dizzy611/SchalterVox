@@ -15,6 +15,7 @@ void audioFile::playFile() {
 	start_playback();
 	if (this->filetype == "ogg") {
 		bool active = false;
+		bool selfquit = false;
 		vorbisdecoder *vd;
 		vd = new vorbisdecoder(this->filename);
 		printf("Loaded vorbis file %s\n", this->filename.c_str());
@@ -32,16 +33,20 @@ void audioFile::playFile() {
 			if (kDown & KEY_PLUS) {
 				printf("DEBUG: Key pressed. Asked to quit.\n");
 				active=false;
+				selfquit=false;
 			}
 			if (!vd->checkRunning()) {
 				printf("DEBUG: Vorbis thread terminated.\n");
 				active=false;
-			}
+				selfquit=true;
+			}	
 			gfxFlushBuffers();
 			gfxSwapBuffers();
 			gfxWaitForVsync();
 		}
-		vd->stop();
+		if (!selfquit) {
+			vd->stop();
+		}
 		printf("Vorbis playback stopped.\n");
 		delete vd;
 	} else if (filetype == "mp3") {

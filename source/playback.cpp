@@ -3,6 +3,7 @@
 #include <malloc.h>
 #include "playback.hpp"
 #include <cstdio>
+#include <cmath>
 
 void start_playback() {
 	atb = (u32 *)malloc(ATB_SIZE * sizeof(u32));
@@ -16,14 +17,32 @@ void start_playback() {
 	threadStart(&playback_thread);
 }
 
-void stop_playback() {
+void stop_playback(bool playout) {
+	if (playout) {
+		while (atbUsed > 0) { // Wait for the buffer to empty before terminating.
+			svcSleepThread(1000);
+		}
+		u64 sleepnano = floor(4000000000.0*(AUDIO_BUFFER_SAMPLES/AUDIO_SAMPLERATE)); // Sleep for 4x the system buffer size, to drain all buffers.
+		svcSleepThread(sleepnano);
+	}
+	mutexLock(&aStatusLock);
+	condvarWait(&aStatusCV);
 	playing = false;
+	mutexUnlock(&aStatusLock);
 	threadWaitForExit(&playback_thread);
 	audoutStopAudioOut();
 	audoutExit();
 }
 
 void playback_thread_main(void *) {
+	bool waiting = true;
+	while (waiting) {
+		svcSleepThread(1000);
+		if (atbUsed > (ATB_SIZE/2)) {
+			waiting = false;
+		}
+	}
+	printf("Initializing playback.\n");
 	AudioOutBuffer sources[4];	
 	
 	u32 rdata_size = (AUDIO_BUFFER_SAMPLES * sizeof(u32) + 0xfff) & ~0xfff;
@@ -39,31 +58,43 @@ void playback_thread_main(void *) {
 		
 		audoutAppendAudioOutBuffer(&sources[i]);
 	}
-	
-	while (playing) {
+	bool p = playing;
+	while (p) {
+		condvarWakeAll(&aStatusCV);
+		mutexUnlock(&aStatusLock);
+		
 		u32 cnt;
 		AudioOutBuffer *released;
 		audoutWaitPlayFinish(&released, &cnt, U64_MAX);
-		
-		mutexLock(&aLock);
-		u32 size;
-		if (atbUsed < AUDIO_BUFFER_SAMPLES) {
-			size = atbUsed * sizeof(u32);
+		if (atbUsed != 0) {
+			mutexLock(&aLock);
+			u32 size;
+			if (atbUsed < AUDIO_BUFFER_SAMPLES) {
+				size = atbUsed * sizeof(u32);
+			} else {
+				size = AUDIO_BUFFER_SAMPLES * sizeof(u32);
+			}
+			memcpy(released->buffer, atb, size);
+			if (size == 0) {
+				released->data_size = AUDIO_BUFFER_SAMPLES * sizeof(u32);
+			} else {
+				released->data_size = size;
+			}
+			atbUsed -= size / sizeof(u32);
+			memmove(atb, atb + (size / sizeof(u32)), atbUsed * sizeof(u32));
+			
+			mutexUnlock(&aLock);
+			
+			audoutAppendAudioOutBuffer(released);
 		} else {
+			u32 size;
 			size = AUDIO_BUFFER_SAMPLES * sizeof(u32);
-		}
-		memcpy(released->buffer, atb, size);
-		if (size == 0) {
-			released->data_size = AUDIO_BUFFER_SAMPLES * sizeof(u32);
-		} else {
+			memset(released->buffer, 0, size);
 			released->data_size = size;
+			audoutAppendAudioOutBuffer(released);
 		}
-		atbUsed -= size / sizeof(u32);
-		memmove(atb, atb + (size / sizeof(u32)), atbUsed * sizeof(u32));
-		
-		mutexUnlock(&aLock);
-		
-		audoutAppendAudioOutBuffer(released);
+		mutexLock(&aStatusLock);
+		p = playing;
 	}
 	
 	free(rdata[0]);

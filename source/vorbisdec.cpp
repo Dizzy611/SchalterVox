@@ -14,7 +14,8 @@
 
 #define SAMPLERATE 48000
 #define CHANNELCOUNT 2
-#define FRAMERATE (1000 / 25)
+#define FRAMEMS 1
+#define FRAMERATE (1000 / FRAMEMS)
 #define SAMPLECOUNT (SAMPLERATE / FRAMERATE)
 #define BYTESPERSAMPLE 2
 #define BUFFERSIZE (SAMPLECOUNT * CHANNELCOUNT * BYTESPERSAMPLE)
@@ -80,7 +81,7 @@ void vorbisdecoder::main_thread(void *) {
 	mutexLock(&this->decodeStatusLock);
 	this->decodeRunning=true;
 	bool running=this->decodeRunning;
-	printf("Vorbis decode thread started...\n");
+	printf("Vorbis decode thread started, filling buffer...\n");
 	
 	while (running) {
 		condvarWakeAll(&this->decodeStatusCV);
@@ -89,10 +90,12 @@ void vorbisdecoder::main_thread(void *) {
 		mutexLock(&this->decodeLock);
 		long retval = ov_read(&this->vorbisFile,(char *)this->decodeBuffer,this->decodeBufferSize,0,2,1,&this->section);	
 		if (retval == 0) {
+			printf("Vorbis reached EOF.\n");
 			//this->resamplerData.end_of_input = 1;
 			mutexLock(&this->decodeStatusLock);
-			condvarWait(&this->decodeStatusCV);
+			
 			this->decodeRunning = false;
+			condvarWakeAll(&this->decodeStatusCV);
 			mutexUnlock(&this->decodeStatusLock);
 		} else {
 			
@@ -101,17 +104,18 @@ void vorbisdecoder::main_thread(void *) {
 			//this->resamplerData.data_out = this->resamplingBufferOut;
 			//src_process(this->resamplerState, &this->resamplerData);			
 			//src_float_to_short_array(this->resamplingBufferOut, this->resampledBuffer, BUFFERSIZE);
-			int x = fillPlayBuffer(this->decodeBuffer, BUFFERSIZE);
+			int x = fillPlayBuffer(this->decodeBuffer, retval/2);
 			if (x == -1) { // buffer overflow. Wait before trying again.
 				while (x == -1) {
-					svcSleepThread(16000000); // 16ms, one frame.
-					x = fillPlayBuffer(this->decodeBuffer, BUFFERSIZE);
+					svcSleepThread((FRAMEMS * 1000000)/4);
+					x = fillPlayBuffer(this->decodeBuffer, retval/2);
 				}
 			}
 			
 		}
 		mutexUnlock(&this->decodeLock);
 		
+		svcSleepThread(1000);
 		
 		mutexLock(&this->decodeStatusLock);
 		running = this->decodeRunning;
