@@ -4,7 +4,7 @@ A (WORKING, but horribly unfinished) media player for the Nintendo Switch
 
 # Known Bugs
 * Occasionally freezes during OGG load.
-* Vorbis decode thread sometimes (but not always) disobeys signal to quit. (keep hitting the button if it seems to do nothing! I need to put input on its own thread)
+* Vorbis decode thread sometimes (but not always) disobeys signal to quit. (keep hitting the "+" button if it doesn't seem to be stopping! I need to put input on its own thread)
 
 # Immediate TODO
 * Make pressing + cause an immediate stop instead of waiting for buffers to flush.
