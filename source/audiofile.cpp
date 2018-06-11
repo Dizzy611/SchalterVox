@@ -18,6 +18,10 @@ void audioFile::playFile() {
 		bool selfquit = false;
 		vorbisdecoder *vd;
 		vd = new vorbisdecoder(this->filename);
+		if (!vd->decoderValid) {
+			printf("ERROR: %s \n", vd->decoderError.c_str());
+			return;
+		}
 		printf("Loaded vorbis file %s\n", this->filename.c_str());
 		printf("%i channels @%ldHz\n", vd->info->channels, vd->info->rate);
 		for (int i=0; i<(vd->comment->comments); i++) {
@@ -71,6 +75,8 @@ void audioFile::updateMetadata() {
 
 
 decoder::decoder() {
+	this->decoderValid = false;
+	this->decoderError = "";
 	condvarInit(&this->decodeStatusCV, &this->decodeStatusLock);
 	mutexLock(&this->decodeLock);
 	this->resamplerState = src_new(SRC_LINEAR, 2, &this->resamplerError);

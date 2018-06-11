@@ -26,9 +26,16 @@ vorbisdecoder::vorbisdecoder(const string& fileName) {
 	mutexLock(&this->decodeLock);
 	int lvRet = ov_fopen(fileName.c_str(), &this->vorbisFile);
 	if (lvRet < 0) {
-		throw "Unable to open Vorbis file. (Failed during OV_FOPEN)";
+		this->decoderValid = false;
+		this->decoderError = "Error " + to_string(lvRet) + " during OV_OPEN";
+		return;
 	}
 	this->info = ov_info(&this->vorbisFile, -1);
+	if (this->info->rate != 48000) {
+		this->decoderValid = false;
+		this->decoderError = "Error, file is " + to_string(this->info->rate) + "Hz, can only play at 48000Hz currently.";
+		return;
+	}
 	this->comment = ov_comment(&this->vorbisFile,-1);
 	this->resamplerData.src_ratio = (1.0 * SAMPLERATE)/this->info->rate;
 	this->resamplerData.output_frames = BUFFERSIZE/CHANNELCOUNT;
@@ -38,6 +45,7 @@ vorbisdecoder::vorbisdecoder(const string& fileName) {
 	this->decodeBuffer = (s16 *) malloc(this->decodeBufferSize);
 	this->resampledBuffer = (s16 *) malloc(BUFFERSIZE);
 	this->decodeRunning = false;
+	this->decoderValid = true;
 	mutexUnlock(&this->decodeLock);
 }
 		
