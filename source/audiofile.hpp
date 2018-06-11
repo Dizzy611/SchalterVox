@@ -7,12 +7,7 @@
 #include "util.hpp"
 #include "playback.hpp"
 
-#define SAMPLERATE 48000
-#define CHANNELCOUNT 2
-#define FRAMERATE (1000 / 30)
-#define SAMPLECOUNT (SAMPLERATE / FRAMERATE)
-#define BYTESPERSAMPLE 2
-#define BUFFERSIZE (SAMPLECOUNT * CHANNELCOUNT * BYTESPERSAMPLE)
+
 using namespace std;
 
 typedef string vorbisFile;

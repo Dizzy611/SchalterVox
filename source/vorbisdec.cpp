@@ -14,7 +14,8 @@
 
 #define SAMPLERATE 48000
 #define CHANNELCOUNT 2
-#define FRAMERATE (1000 / 30)
+#define FRAMERATE (1000 / 25)
+#define SAMPLECOUNT (SAMPLERATE / FRAMERATE)
 #define BYTESPERSAMPLE 2
 #define BUFFERSIZE (SAMPLECOUNT * CHANNELCOUNT * BYTESPERSAMPLE)
 
@@ -56,16 +57,16 @@ void vorbisdecoder::start() {
 
 void vorbisdecoder::stop() {
 	mutexLock(&this->decodeStatusLock);
+	condvarWait(&this->decodeStatusCV);
 	this->decodeRunning = false;
-	condvarWakeAll(&this->decodeStatusCV);
 	mutexUnlock(&this->decodeStatusLock);
 	threadWaitForExit(&this->decodingThread);
 }
 
 bool vorbisdecoder::checkRunning() {
 	mutexLock(&this->decodeStatusLock);
+	condvarWait(&this->decodeStatusCV);
 	bool tmp = this->decodeRunning;
-	condvarWakeAll(&this->decodeStatusCV);
 	mutexUnlock(&this->decodeStatusLock);
 	return tmp;
 }
@@ -77,12 +78,12 @@ void vorbisdecoder_trampoline(void *parameter) {
 
 void vorbisdecoder::main_thread(void *) {
 	mutexLock(&this->decodeStatusLock);
-	condvarWait(&this->decodeStatusCV);
 	this->decodeRunning=true;
 	bool running=this->decodeRunning;
 	printf("Vorbis decode thread started...\n");
 	
 	while (running) {
+		condvarWakeAll(&this->decodeStatusCV);
 		mutexUnlock(&this->decodeStatusLock);
 
 		mutexLock(&this->decodeLock);
@@ -113,8 +114,8 @@ void vorbisdecoder::main_thread(void *) {
 		
 		
 		mutexLock(&this->decodeStatusLock);
-		condvarWait(&this->decodeStatusCV);
 		running = this->decodeRunning;
 	}
+	condvarWakeAll(&this->decodeStatusCV);
 	mutexUnlock(&this->decodeStatusLock);
 }
