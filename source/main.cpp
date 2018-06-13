@@ -22,7 +22,11 @@ void waitExit() {
 	
 	gfxExit();
 }
-	
+
+void audioLoop() {
+
+}
+
 int main() {	
 	gfxInitDefault();
 	consoleInit(NULL);

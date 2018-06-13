@@ -21,6 +21,25 @@
 #define BUFFERSIZE (SAMPLECOUNT * CHANNELCOUNT * BYTESPERSAMPLE)
 
 using namespace std;
+
+vorbis_tags vorbis_comment_split(const string &s) {
+	vorbis_tags retval;
+	stringstream ss(s);
+	string item;
+	string body_construct = "";
+	int i = 0;
+	while (getline(ss, item, '=')) {
+		if (i == 0) {
+			retval.header = item;
+		} else {
+			body_construct = body_construct + item + "=";
+		}
+		i++;
+	}
+	body_construct.pop_back();
+	retval.body = body_construct;
+	return retval;
+}
 	
 vorbisdecoder::vorbisdecoder(const string& fileName) {
 	mutexLock(&this->decodeLock);
@@ -108,7 +127,7 @@ void vorbisdecoder::main_thread(void *) {
 			this->decodeRunning = false;
 			condvarWakeAll(&this->decodeStatusCV);
 			mutexUnlock(&this->decodeStatusLock);
-			this->decodeError = "VORBIS: Decode error " + to_string(retval);
+			this->decoderError = "VORBIS: Decode error " + to_string(retval);
 		} else {
 			
 			//src_short_to_float_array(this->decodeBuffer, this->resamplingBufferIn, this->decodeBufferSize);

@@ -1,15 +1,21 @@
 #include <switch.h>
+#include <sstream>
+#include <string>
 #include "audiofile.hpp"
 #include "util.hpp"
 #include "vorbisdec.hpp"
 #include "input.hpp"
 
 audioFile::audioFile(const string& filename) {
-	this->filename = filename;
-	this->filetype = getFileExt(filename);
-	this->title = "Unknown";
-	this->author = "Unknown";
-	this->album = "Unknown";
+	this->Metadata.filename = filename;
+	this->Metadata.filetype = getFileExt(filename);
+	this->Metadata.title = "Unknown";
+	this->Metadata.artist = "Unknown";
+	this->Metadata.album = "Unknown";
+	this->Metadata.bitrate = 0;
+	this->Metadata.samplerate = 48000;
+	this->Metadata.channels = 2;
+	this->Metadata.bitdepth = 16;
 }
 
 void audioFile::playFile() {
@@ -17,21 +23,33 @@ void audioFile::playFile() {
 	start_playback();
 	input_handler *ih = new input_handler();
 	ih->start();
-	if (this->filetype == "ogg") {
+	string filetype = this->Metadata.filetype;
+	if (filetype == "ogg") {		
 		bool active = false;
 		vorbisdecoder *vd;
-		vd = new vorbisdecoder(this->filename);
+		vd = new vorbisdecoder(this->Metadata.filename);
 		if (!vd->decoderValid) {
 			printf("ERROR: %s \n", vd->decoderError.c_str());
 			abort_playback();
 			return;
 		}
-		printf("Loaded vorbis file %s\n", this->filename.c_str());
-		printf("%i channels @%ldHz\n", vd->info->channels, vd->info->rate);
+		this->Metadata.channels = vd->info->channels;
+		this->Metadata.samplerate = vd->info->rate;
 		for (int i=0; i<(vd->comment->comments); i++) {
-			printf(vd->comment->user_comments[i]);
-			printf("\n");
+			vorbis_tags vt = vorbis_comment_split(vd->comment->user_comments[i]);
+			if (vt.header == "ARTIST") {
+				this->Metadata.artist = vt.body;
+			} else if (vt.header == "ALBUM") {
+				this->Metadata.album = vt.body;
+			} else if (vt.header == "TITLE") {
+				this->Metadata.title = vt.body;
+			} else {
+				this->Metadata.other.push_back(vd->comment->user_comments[i]);
+			}
 		}
+		printf("DEBUG: FILENAME %s FILETYPE %s ARTIST %s ALBUM %s TITLE %s SAMPLERATE %i BITDEPTH %i CHANNELS %i\n",
+		       this->Metadata.filename.c_str(), this->Metadata.filetype.c_str(), this->Metadata.artist.c_str(), this->Metadata.album.c_str(),
+			   this->Metadata.title.c_str(), this->Metadata.samplerate, this->Metadata.bitdepth, this->Metadata.channels);
 		printf("Beginning Ogg Vorbis playback. Press + to stop playback. Press + again to quit.\n");
 		vd->start();
 		active = true;

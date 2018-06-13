@@ -16,6 +16,18 @@ typedef string mp3File;
 typedef string wavFile;
 typedef string modFile;
 
+struct metadata {
+	string filename;
+	string filetype;
+	string artist;
+	string album;
+	string title;
+	u16 bitrate;
+	int samplerate;
+	u8 channels;
+	u8 bitdepth;
+	vector<string> other;
+};
 
 class decoder {
 	public:
@@ -44,22 +56,13 @@ class decoder {
 class audioFile {
 	public:
 		decoder Decoder;
-		string filename;
-		string filetype;
-		string title;
-		string author;
-		string album;
+		metadata Metadata;
 		audioFile(const string& filename);
 		void playFile();
 	private:
+		int checkDecoder();
 		void validateFile();
 		void updateMetadata();
-		int vorbisDec();
-		int flacDec();
-		int mp3Dec();
-		int wavDec();
-		int modplugDec();
-		int nothingDec();
 };
 
 #endif

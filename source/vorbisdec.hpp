@@ -1,7 +1,16 @@
 #include <vorbis/codec.h>
 #include <vorbis/vorbisfile.h>
+#include <string>
+#include <sstream>
 
 void vorbisdecoder_trampoline(void *parameter);
+
+struct vorbis_tags {
+	string header;
+	string body;
+};
+
+vorbis_tags vorbis_comment_split(const string &s);
 
 class vorbisdecoder : public decoder {
 	public:
