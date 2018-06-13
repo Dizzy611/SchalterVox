@@ -2,6 +2,7 @@
 #include "audiofile.hpp"
 #include "util.hpp"
 #include "vorbisdec.hpp"
+#include "input.hpp"
 
 audioFile::audioFile(const string& filename) {
 	this->filename = filename;
@@ -13,6 +14,8 @@ audioFile::audioFile(const string& filename) {
 
 void audioFile::playFile() {
 	start_playback();
+	input_handler *ih = new input_handler();
+	ih->start();
 	if (this->filetype == "ogg") {
 		bool active = false;
 		bool selfquit = false;
@@ -28,9 +31,8 @@ void audioFile::playFile() {
 		vd->start();
 		active = true;
 		while (active) {
-			hidScanInput();
-			u64 kDown = hidKeysDown(CONTROLLER_P1_AUTO);
-			if (kDown & KEY_PLUS) {
+			u32 signals = ih->get_signals();
+			if (signals & SIG_STOPQUIT) {
 				printf("DEBUG: Key pressed. Asked to quit.\n");
 				active=false;
 				selfquit=false;
@@ -57,7 +59,9 @@ void audioFile::playFile() {
 		// TODO
 	} else if ((filetype == "mod") || (filetype == "it") || (filetype == "s3m") || (filetype == "xm")) {
 		// TODO
-	} 	
+	}
+	ih->stop();
+	delete ih;
 	stop_playback();
 }
 
