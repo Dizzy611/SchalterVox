@@ -8,6 +8,21 @@
 
 using namespace std;
 
+void waitExit() {
+	while(appletMainLoop()) {
+		hidScanInput();
+		u64 keys = hidKeysDown(CONTROLLER_P1_AUTO);
+		
+		if (keys & KEY_PLUS) break;
+
+		gfxFlushBuffers();
+		gfxSwapBuffers();
+		gfxWaitForVsync();
+	}
+	
+	gfxExit();
+}
+	
 int main() {	
 	gfxInitDefault();
 	consoleInit(NULL);
@@ -21,26 +36,20 @@ int main() {
 	} else {
 		printf("While reading directory: Error number %i\n", errno);
 	}
-	
-	printf("Loading first ogg file and attempting to play...\n");
-	audioFile *af = new audioFile(files.front());
-	af->playFile();
-	delete af;
-	printf("Playback loop ended. TODO: Play next file. :P\n");
-	while(appletMainLoop()) {
-		hidScanInput();
-		u64 keys = hidKeysDown(CONTROLLER_P1_AUTO);
-		
-		if (keys & KEY_PLUS) break;
-
-		gfxFlushBuffers();
-		gfxSwapBuffers();
-		gfxWaitForVsync();
+	if (files.empty()) {
+		printf("No OGG Vorbis files found. Please place vorbis files in the oggs/ directory.\nPress + to quit.\n");
+	} else {
+		printf("Loading first ogg file and attempting to play...\n");
+		audioFile *af = new audioFile(files.front());
+		af->playFile();
+		delete af;
+		printf("Exited playback mode. Press + to quit.\n");
 	}
-	
-	gfxExit();
+	waitExit();
 	return 0;
 }
+
+
 
 
 	

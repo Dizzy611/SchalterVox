@@ -7,7 +7,7 @@ audioFile::audioFile(const string& filename) {
 	this->filename = filename;
 	this->filetype = getFileExt(filename);
 	this->title = "Unknown";
-	this->author = "hisUnknown";
+	this->author = "Unknown";
 	this->album = "Unknown";
 }
 
@@ -20,7 +20,7 @@ void audioFile::playFile() {
 		vd = new vorbisdecoder(this->filename);
 		if (!vd->decoderValid) {
 			printf("ERROR: %s \n", vd->decoderError.c_str());
-			stop_playback(false);
+			abort_playback();
 			return;
 		}
 		printf("Loaded vorbis file %s\n", this->filename.c_str());

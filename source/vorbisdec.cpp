@@ -89,7 +89,6 @@ void vorbisdecoder::main_thread(void *) {
 	mutexLock(&this->decodeStatusLock);
 	this->decodeRunning=true;
 	bool running=this->decodeRunning;
-	printf("Vorbis decode thread started, filling buffer...\n");
 	
 	while (running) {
 		condvarWakeAll(&this->decodeStatusCV);
@@ -98,13 +97,18 @@ void vorbisdecoder::main_thread(void *) {
 		mutexLock(&this->decodeLock);
 		long retval = ov_read(&this->vorbisFile,(char *)this->decodeBuffer,this->decodeBufferSize,0,2,1,&this->section);	
 		if (retval == 0) {
-			printf("Vorbis reached EOF.\n");
 			//this->resamplerData.end_of_input = 1;
 			mutexLock(&this->decodeStatusLock);
 			
 			this->decodeRunning = false;
 			condvarWakeAll(&this->decodeStatusCV);
 			mutexUnlock(&this->decodeStatusLock);
+		} else if ((retval == OV_HOLE) || (retval == OV_EBADLINK) || (retval == OV_EINVAL)) {
+			mutexLock(&this->decodeStatusLock);
+			this->decodeRunning = false;
+			condvarWakeAll(&this->decodeStatusCV);
+			mutexUnlock(&this->decodeStatusLock);
+			printf("VORBIS: Decode error %ld", retval);
 		} else {
 			
 			//src_short_to_float_array(this->decodeBuffer, this->resamplingBufferIn, this->decodeBufferSize);

@@ -45,6 +45,16 @@ void stop_playback(bool playout) {
 	audoutExit();
 }
 
+void abort_playback() { // Used for errors.
+	mutexLock(&aStatusLock);
+	condvarWait(&aStatusCV);
+	playing = false;
+	mutexUnlock(&aStatusLock);
+	threadWaitForExit(&playback_thread);
+	audoutStopAudioOut();
+	audoutExit();
+}
+
 void playback_thread_main(void *) {
 	bool waiting = true;
 	while (waiting) {
@@ -52,8 +62,12 @@ void playback_thread_main(void *) {
 		if (atbUsed > (ATB_SIZE/2)) {
 			waiting = false;
 		}
+		mutexLock(&aStatusLock);
+		bool p = playing;
+		condvarWakeAll(&aStatusCV);
+		mutexUnlock(&aStatusLock);
+		if (!p) break;
 	}
-	printf("Initializing playback.\n");
 	AudioOutBuffer sources[4];	
 	
 	u32 rdata_size = (AUDIO_BUFFER_SAMPLES * sizeof(u32) + 0xfff) & ~0xfff;
@@ -69,6 +83,7 @@ void playback_thread_main(void *) {
 		
 		audoutAppendAudioOutBuffer(&sources[i]);
 	}
+	mutexLock(&aStatusLock);
 	bool p = playing;
 	while (p) {
 		condvarWakeAll(&aStatusCV);
