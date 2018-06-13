@@ -13,12 +13,12 @@ audioFile::audioFile(const string& filename) {
 }
 
 void audioFile::playFile() {
+	bool selfquit = false;
 	start_playback();
 	input_handler *ih = new input_handler();
 	ih->start();
 	if (this->filetype == "ogg") {
 		bool active = false;
-		bool selfquit = false;
 		vorbisdecoder *vd;
 		vd = new vorbisdecoder(this->filename);
 		if (!vd->decoderValid) {
@@ -72,7 +72,7 @@ void audioFile::playFile() {
 	}
 	ih->stop();
 	delete ih;
-	stop_playback();
+	stop_playback(selfquit);
 }
 
 void audioFile::validateFile() {

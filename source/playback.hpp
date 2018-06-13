@@ -8,7 +8,8 @@ int fillPlayBuffer(int16_t *inBuffer, int length);
 void stop_playback(bool playout=true);
 
 #define AUDIO_SAMPLERATE 48000
-#define AUDIO_BUFFER_SAMPLES (AUDIO_SAMPLERATE)
+#define AUDIO_BUFFER_DIVIDER 32
+#define AUDIO_BUFFER_SAMPLES (AUDIO_SAMPLERATE / AUDIO_BUFFER_DIVIDER)
 #define ATB_SIZE (AUDIO_BUFFER_SAMPLES * 6)
 
 #endif

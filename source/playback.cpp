@@ -9,8 +9,8 @@
 static int atbUsed = 0;
 static u32 *atb;
 static Mutex aLock;
-
 static bool playing=false;
+static bool flushing=false;
 static Thread playback_thread;
 static Mutex aStatusLock;
 static CondVar aStatusCV;
@@ -30,12 +30,17 @@ void start_playback() {
 
 void stop_playback(bool playout) {
 	if (playout) {
-		while (atbUsed > 0) { // Wait for the buffer to empty before terminating.
-			svcSleepThread(1000);
+		bool flsh = false;
+		while (!flsh) { // Wait for the buffer to empty before terminating.
+			mutexLock(&aStatusLock);
+			condvarWait(&aStatusCV);
+			flsh = flushing;
+			mutexUnlock(&aStatusLock);
 		}
-		u64 sleepnano = floor(4000000000.0*(AUDIO_BUFFER_SAMPLES/AUDIO_SAMPLERATE)); // Sleep for 4x the system buffer size, to drain all buffers.
+		u64 sleepnano = 4000000000/AUDIO_BUFFER_DIVIDER; // Sleep for 4x the system buffer size, to drain all buffers.
 		svcSleepThread(sleepnano);
 	}
+	
 	mutexLock(&aStatusLock);
 	condvarWait(&aStatusCV);
 	playing = false;
@@ -85,6 +90,7 @@ void playback_thread_main(void *) {
 	}
 	mutexLock(&aStatusLock);
 	bool p = playing;
+	flushing = false;
 	while (p) {
 		condvarWakeAll(&aStatusCV);
 		mutexUnlock(&aStatusLock);
@@ -92,8 +98,13 @@ void playback_thread_main(void *) {
 		u32 cnt;
 		AudioOutBuffer *released;
 		audoutWaitPlayFinish(&released, &cnt, U64_MAX);
+
+		mutexLock(&aLock);		
 		if (atbUsed != 0) {
-			mutexLock(&aLock);
+			mutexLock(&aStatusLock);
+			flushing = false;
+			condvarWakeAll(&aStatusCV);
+			mutexUnlock(&aStatusLock);
 			u32 size;
 			if (atbUsed < AUDIO_BUFFER_SAMPLES) {
 				size = atbUsed * sizeof(u32);
@@ -109,16 +120,22 @@ void playback_thread_main(void *) {
 			atbUsed -= size / sizeof(u32);
 			memmove(atb, atb + (size / sizeof(u32)), atbUsed * sizeof(u32));
 			
-			mutexUnlock(&aLock);
 			
 			audoutAppendAudioOutBuffer(released);
 		} else {
+			mutexLock(&aStatusLock);
+			flushing = true;
+			condvarWakeAll(&aStatusCV);
+			mutexUnlock(&aStatusLock);
 			u32 size;
 			size = AUDIO_BUFFER_SAMPLES * sizeof(u32);
 			memset(released->buffer, 0, size);
 			released->data_size = size;
 			audoutAppendAudioOutBuffer(released);
+			svcSleepThread(3500); // Give main thread time to signal shutdown
 		}
+		mutexUnlock(&aLock);
+		
 		mutexLock(&aStatusLock);
 		p = playing;
 	}
@@ -133,7 +150,6 @@ int fillPlayBuffer(int16_t *inBuffer, int length) {
 		mutexUnlock(&aLock);
 		return -1;
 	}
-
 	memcpy(atb + atbUsed, inBuffer, length * sizeof(s16));
 	atbUsed += length / 2;
 	mutexUnlock(&aLock);
