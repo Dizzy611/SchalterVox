@@ -21,6 +21,8 @@ class decoder {
 	public:
 		decoder();
 		~decoder();
+		bool decoderValid;
+		string decoderError;
 	protected:
 		Thread decodingThread;
 		Mutex decodeLock = 0;
@@ -49,7 +51,6 @@ class audioFile {
 		string album;
 		audioFile(const string& filename);
 		void playFile();
-		
 	private:
 		void validateFile();
 		void updateMetadata();

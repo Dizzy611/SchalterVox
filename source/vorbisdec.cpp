@@ -26,9 +26,16 @@ vorbisdecoder::vorbisdecoder(const string& fileName) {
 	mutexLock(&this->decodeLock);
 	int lvRet = ov_fopen(fileName.c_str(), &this->vorbisFile);
 	if (lvRet < 0) {
-		throw "Unable to open Vorbis file. (Failed during OV_FOPEN)";
+		this->decoderValid = false;
+		this->decoderError = "Error " + to_string(lvRet) + " during OV_OPEN";
+		return;
 	}
 	this->info = ov_info(&this->vorbisFile, -1);
+	if (this->info->rate != 48000) {
+		this->decoderValid = false;
+		this->decoderError = "Error, file is " + to_string(this->info->rate) + "Hz, can only play at 48000Hz currently.";
+		return;
+	}
 	this->comment = ov_comment(&this->vorbisFile,-1);
 	this->resamplerData.src_ratio = (1.0 * SAMPLERATE)/this->info->rate;
 	this->resamplerData.output_frames = BUFFERSIZE/CHANNELCOUNT;
@@ -38,6 +45,7 @@ vorbisdecoder::vorbisdecoder(const string& fileName) {
 	this->decodeBuffer = (s16 *) malloc(this->decodeBufferSize);
 	this->resampledBuffer = (s16 *) malloc(BUFFERSIZE);
 	this->decodeRunning = false;
+	this->decoderValid = true;
 	mutexUnlock(&this->decodeLock);
 }
 		
@@ -81,7 +89,6 @@ void vorbisdecoder::main_thread(void *) {
 	mutexLock(&this->decodeStatusLock);
 	this->decodeRunning=true;
 	bool running=this->decodeRunning;
-	printf("Vorbis decode thread started, filling buffer...\n");
 	
 	while (running) {
 		condvarWakeAll(&this->decodeStatusCV);
@@ -90,13 +97,18 @@ void vorbisdecoder::main_thread(void *) {
 		mutexLock(&this->decodeLock);
 		long retval = ov_read(&this->vorbisFile,(char *)this->decodeBuffer,this->decodeBufferSize,0,2,1,&this->section);	
 		if (retval == 0) {
-			printf("Vorbis reached EOF.\n");
 			//this->resamplerData.end_of_input = 1;
 			mutexLock(&this->decodeStatusLock);
 			
 			this->decodeRunning = false;
 			condvarWakeAll(&this->decodeStatusCV);
 			mutexUnlock(&this->decodeStatusLock);
+		} else if ((retval == OV_HOLE) || (retval == OV_EBADLINK) || (retval == OV_EINVAL)) {
+			mutexLock(&this->decodeStatusLock);
+			this->decodeRunning = false;
+			condvarWakeAll(&this->decodeStatusCV);
+			mutexUnlock(&this->decodeStatusLock);
+			printf("VORBIS: Decode error %ld", retval);
 		} else {
 			
 			//src_short_to_float_array(this->decodeBuffer, this->resamplingBufferIn, this->decodeBufferSize);
