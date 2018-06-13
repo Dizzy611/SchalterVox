@@ -8,20 +8,16 @@ It can currently play a single Ogg Vorbis file from the "oggs" directory (so e.g
 "Schalter" is "switch" in german. "Vox" is "voice" in latin. Thus, "switch voice": A voice for your switch.
 
 # Known Bugs
-* Occasionally freezes during OGG load.
-* Vorbis decode thread sometimes (but not always) disobeys signal to quit. (keep hitting the "+" button if it doesn't seem to be stopping! I need to put input on its own thread)
+* Occasionally freezes during OGG load (issue has been rare lately).
 
 # Immediate TODO
-* Make pressing + cause an immediate stop instead of waiting for buffers to flush.
-* Play more than one song.
-* Fix resampling.
-* Tweaks to buffer sizes to improve responsiveness/decrease initial track load time.
-* Code cleanup
+* Play more than one song. (in progress, see multiple-files-take2 branch)
+* Fix resampling. (stalled due to problems with libsamplerate, see resampling branch, hopefully somebody who knows libsamplerate better can help)
 
 # Later TODO
-* Play other file types (MP3, FLAC, all modplug formats, WAV intended)
-* Ability to skip backwards/forwards in tracks (first by track, then eventually scrubbing within a track)
-* GUI
+* Play other file types (MP3, FLAC, all modplug formats, WAV intended) (infrastructure in place)
+* Ability to skip backwards/forwards in tracks (first by track, then eventually scrubbing within a track) (infrastructure in place for Vorbis)
+* GUI (mocked up, private SDL prototype)
 
 # Much Later TODO
 * Video playback
