@@ -95,11 +95,12 @@ void vorbisdecoder::main_thread(void *) {
 		mutexUnlock(&this->decodeStatusLock);
 
 		mutexLock(&this->decodeLock);
-		long retval = ov_read(&this->vorbisFile,(char *)this->decodeBuffer,this->decodeBufferSize,0,2,1,&this->section);	
+		long retval = ov_read(&this->vorbisFile,(char *)this->decodeBuffer,this->decodeBufferSize,0,2,1,&this->section);
+
 		if (retval == 0) {
 			//this->resamplerData.end_of_input = 1;
 			mutexLock(&this->decodeStatusLock);
-			
+			printf("DEBUG: Vorbis EOF.");
 			this->decodeRunning = false;
 			condvarWakeAll(&this->decodeStatusCV);
 			mutexUnlock(&this->decodeStatusLock);
