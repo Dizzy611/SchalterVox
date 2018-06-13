@@ -4,13 +4,13 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string>
-#include <samplerate.h>
 #include <cstring>
 #include <malloc.h>
 #include <cmath>
 #include "audiofile.hpp"
 #include "playback.hpp"
 #include "vorbisdec.hpp"
+#include "resampler.hpp"
 
 #define SAMPLERATE 48000
 #define CHANNELCOUNT 2
@@ -50,11 +50,11 @@ vorbisdecoder::vorbisdecoder(const string& fileName) {
 		return;
 	}
 	this->info = ov_info(&this->vorbisFile, -1);
-	if (this->info->rate != 48000) {
-		this->decoderValid = false;
-		this->decoderError = "Error, file is " + to_string(this->info->rate) + "Hz, can only play at 48000Hz currently.";
-		return;
-	}
+	//if (this->info->rate != SAMPLERATE) {
+	//	this->decoderValid = false;
+	//	this->decoderError = "Error, file is " + to_string(this->info->rate) + "Hz, can only play at SAMPLERATEHz currently.";
+	//	return;
+	//}
 	this->comment = ov_comment(&this->vorbisFile,-1);
 	this->decodeBufferSize = ((this->info->rate/FRAMERATE) * BYTESPERSAMPLE * this->info->channels);
 	this->decodeBuffer = (s16 *) malloc(this->decodeBufferSize);
@@ -151,19 +151,26 @@ void vorbisdecoder::main_thread(void *) {
 			mutexUnlock(&this->decodeStatusLock);
 			this->decoderError = "VORBIS: Decode error " + to_string(retval);
 		} else {
-			//if (this->info->rate != 48000) {
-				//u32 target_size = ((48000/FRAMERATE) * BYTESPERSAMPLE * this->info->channels)
-				//rbuffer *s16 = malloc(target_size);
-				//do_resample(this->decodeBuffer, rbuffer, this->info->rate, 48000, this->decodeBufferSize, target_size);
-			//}	
-			int x = fillPlayBuffer(this->decodeBuffer, retval/2);
-			if (x == -1) { // buffer overflow. Wait before trying again.
-				while (x == -1) {
-					svcSleepThread((FRAMEMS * 1000000)/4);
-					x = fillPlayBuffer(this->decodeBuffer, retval/2);
+			if (this->info->rate != SAMPLERATE) {
+				u32 target_size = ceil((double)retval * (this->info->rate/SAMPLERATE));
+				s16* rbuffer = (s16*) malloc(target_size);
+				do_resample(this->decodeBuffer, rbuffer, this->info->rate, retval, target_size);
+				int x = fillPlayBuffer(rbuffer, retval/2);
+				if (x == -1) { // buffer overflow. Wait before trying again.
+					while (x == -1) {
+						svcSleepThread((FRAMEMS * 1000000)/4);
+						x = fillPlayBuffer(rbuffer, retval/2);
+					}
+				}
+			} else {
+				int x = fillPlayBuffer(this->decodeBuffer, retval/2);
+				if (x == -1) { // buffer overflow. Wait before trying again.
+					while (x == -1) {
+						svcSleepThread((FRAMEMS * 1000000)/4);
+						x = fillPlayBuffer(this->decodeBuffer, retval/2);
+					}
 				}
 			}
-			
 		}
 		mutexUnlock(&this->decodeLock);
 		
