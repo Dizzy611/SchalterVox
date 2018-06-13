@@ -100,7 +100,6 @@ void vorbisdecoder::main_thread(void *) {
 		if (retval == 0) {
 			//this->resamplerData.end_of_input = 1;
 			mutexLock(&this->decodeStatusLock);
-			printf("DEBUG: Vorbis EOF.");
 			this->decodeRunning = false;
 			condvarWakeAll(&this->decodeStatusCV);
 			mutexUnlock(&this->decodeStatusLock);
@@ -109,7 +108,7 @@ void vorbisdecoder::main_thread(void *) {
 			this->decodeRunning = false;
 			condvarWakeAll(&this->decodeStatusCV);
 			mutexUnlock(&this->decodeStatusLock);
-			printf("VORBIS: Decode error %ld", retval);
+			this->decodeError = "VORBIS: Decode error " + to_string(retval);
 		} else {
 			
 			//src_short_to_float_array(this->decodeBuffer, this->resamplingBufferIn, this->decodeBufferSize);

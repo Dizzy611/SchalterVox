@@ -38,7 +38,6 @@ void stop_playback(bool playout) {
 			mutexUnlock(&aStatusLock);
 		}
 		u64 sleepnano = 4000000000/AUDIO_BUFFER_DIVIDER; // Sleep for 4x the system buffer size, to drain all buffers.
-		printf("Sleeping for %ld nanoseconds (%ld milliseconds)...\n", sleepnano, sleepnano/1000000);
 		svcSleepThread(sleepnano);
 	}
 	
