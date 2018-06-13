@@ -6,6 +6,15 @@
 #include <cstdio>
 #include <cmath>
 
+static int atbUsed = 0;
+static u32 *atb;
+static Mutex aLock;
+
+static bool playing=false;
+static Thread playback_thread;
+static Mutex aStatusLock;
+static CondVar aStatusCV;
+
 void start_playback() {
 	atb = (u32 *)malloc(ATB_SIZE * sizeof(u32));
 	mutexInit(&aLock);
