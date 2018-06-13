@@ -5,6 +5,7 @@
 #include <errno.h>
 #include "util.hpp"
 #include "audiofile.hpp"
+#include "input.hpp"
 
 using namespace std;
 
@@ -22,7 +23,62 @@ void waitExit() {
 	
 	gfxExit();
 }
+
+void audioLoop(const string& musicfile) {
+
+	bool selfquit = false;
+	bool active = true;
+
+	input_handler *ih = new input_handler();
+	ih->start();
 	
+	start_playback();
+
+	audioFile *af = new audioFile(musicfile);
+	af->loadFile();
+	af->Decoder->start();
+	
+	if ((af->Metadata.artist != "Unknown") && (af->Metadata.title != "Unknown")) {
+		printf("Now Playing: %s - %s\n", af->Metadata.artist.c_str(), af->Metadata.title.c_str());
+	}
+	if (af->Metadata.album != "Unknown") {
+		printf("Album: %s\n", af->Metadata.album.c_str());
+	}
+	
+	// Dunno why the bitrate is off by a factor of 5 for Vorbis. It seems to be from testing though.
+	printf("%ikbit %iHz %i-bit %i channel %s\n", af->Metadata.bitrate*5/1024, af->Metadata.samplerate, af->Metadata.bitdepth, af->Metadata.channels, af->Metadata.fancyftype.c_str());
+	printf("Press + to stop.\n");
+	while (active) {
+		printf("%i/%i seconds\r", af->Decoder->Metadata.currtime, af->Metadata.length);
+		u32 signals = ih->get_signals();
+		if (signals & SIG_STOPQUIT) {
+			active=false;
+			selfquit=false;
+		}
+		if (!af->Decoder->checkRunning()) {
+			active=false;	
+			selfquit=true;
+		}
+		if (!appletMainLoop()) {
+			active=false;
+			selfquit=false;
+		}
+		gfxFlushBuffers();
+		gfxSwapBuffers();
+		gfxWaitForVsync();
+	}
+	printf("\nStopped.\n");
+	if (!selfquit) {
+		af->Decoder->stop();
+	}
+	
+	stop_playback(selfquit);
+	ih->stop();
+	delete ih;
+	delete af;
+
+}
+
 int main() {	
 	gfxInitDefault();
 	consoleInit(NULL);
@@ -40,10 +96,8 @@ int main() {
 		printf("No OGG Vorbis files found. Please place vorbis files in the oggs/ directory.\nPress + to quit.\n");
 	} else {
 		printf("Loading first ogg file and attempting to play...\n");
-		audioFile *af = new audioFile(files.front());
-		af->playFile();
-		delete af;
-		printf("Exited playback mode. Press + to quit.\n");
+		audioLoop(files.front());
+		printf("Exited Audio mode. Press + to quit.\n");
 	}
 	waitExit();
 	return 0;

@@ -36,5 +36,6 @@
 # Logs
 *.log
 
-# Build directory
+# Build and testing directories
 build/
+test_files/
