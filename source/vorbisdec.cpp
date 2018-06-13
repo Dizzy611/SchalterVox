@@ -74,7 +74,7 @@ void vorbisdecoder::stop() {
 
 bool vorbisdecoder::checkRunning() {
 	mutexLock(&this->decodeStatusLock);
-	condvarWait(&this->decodeStatusCV);
+	condvarWaitTimeout(&this->decodeStatusCV,100000);
 	bool tmp = this->decodeRunning;
 	mutexUnlock(&this->decodeStatusLock);
 	return tmp;
