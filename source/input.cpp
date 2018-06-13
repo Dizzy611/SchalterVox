@@ -16,13 +16,13 @@ input_handler::~input_handler() {
 }
 
 void input_handler::start() {
-	threadCreate(&this->input_thread, input_trampoline, this, 0x10000, 0x29, 1);
+	threadCreate(&this->input_thread, input_trampoline, this, 0x10000, 0x2E, 1);
 	threadStart(&this->input_thread);
 }
 
 void input_handler::stop() {
 	mutexLock(&this->status_lock);
-	condvarWait(&this->status_cv, &this->status_lock);
+	condvarWait(&this->status_cv);
 	this->running = false;
 	mutexUnlock(&this->status_lock);
 	threadWaitForExit(&this->input_thread);
@@ -35,7 +35,7 @@ void input_trampoline(void *parameter) {
 
 void input_handler::main_thread(void *) {
 	mutexLock(&this->status_lock);
-	input_reading = true;
+	this->running = true;
 	bool i = this->running;
 	while (i) {
 		condvarWakeAll(&this->status_cv);
@@ -46,8 +46,6 @@ void input_handler::main_thread(void *) {
 		this->process_signals(hidKeysDown(CONTROLLER_P1_AUTO));
 		condvarWakeAll(&this->input_cv);
 		mutexUnlock(&this->input_lock);
-		
-		gfxWaitForVsync();
 		
 		mutexLock(&this->status_lock);
 		i = this->running;

@@ -41,7 +41,12 @@ void audioFile::playFile() {
 				printf("DEBUG: Vorbis thread terminated.\n");
 				active=false;
 				selfquit=true;
-			}	
+			}
+			if (!appletMainLoop()) {
+				printf("DEBUG: Asked to quit by Horizon.\n");
+				active=false;
+				selfquit=false;
+			}
 			gfxFlushBuffers();
 			gfxSwapBuffers();
 			gfxWaitForVsync();
