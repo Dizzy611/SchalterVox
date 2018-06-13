@@ -7,7 +7,7 @@
 #include <samplerate.h>
 #include <cstring>
 #include <malloc.h>
-
+#include <cmath>
 #include "audiofile.hpp"
 #include "playback.hpp"
 #include "vorbisdec.hpp"
@@ -56,13 +56,8 @@ vorbisdecoder::vorbisdecoder(const string& fileName) {
 		return;
 	}
 	this->comment = ov_comment(&this->vorbisFile,-1);
-	this->resamplerData.src_ratio = (1.0 * SAMPLERATE)/this->info->rate;
-	this->resamplerData.output_frames = BUFFERSIZE/CHANNELCOUNT;
 	this->decodeBufferSize = ((this->info->rate/FRAMERATE) * BYTESPERSAMPLE * this->info->channels);
-	this->resamplerData.input_frames = this->decodeBufferSize/this->info->channels;
-	this->resamplerData.end_of_input = 0;
 	this->decodeBuffer = (s16 *) malloc(this->decodeBufferSize);
-	this->resampledBuffer = (s16 *) malloc(BUFFERSIZE);
 	this->decodeRunning = false;
 	this->decoderValid = true;
 	mutexUnlock(&this->decodeLock);
@@ -72,7 +67,6 @@ vorbisdecoder::~vorbisdecoder() {
 	mutexLock(&this->decodeLock);
 	this->decodeRunning = false;
 	free(this->decodeBuffer);
-	free(this->resampledBuffer);
 	ov_clear(&this->vorbisFile);
 	mutexUnlock(&this->decodeLock);
 }
@@ -91,10 +85,39 @@ void vorbisdecoder::stop() {
 	threadWaitForExit(&this->decodingThread);
 }
 
+long vorbisdecoder::tell() {
+	return ov_pcm_tell(&this->vorbisFile);
+}
+
+long vorbisdecoder::tell_time() {
+	return ov_time_tell(&this->vorbisFile);
+}
+
+long vorbisdecoder::length() {
+	return ov_pcm_total(&this->vorbisFile, -1);
+}
+
+long vorbisdecoder::length_time() {
+	return ov_time_total(&this->vorbisFile, -1);
+}
+
+int vorbisdecoder::seek(long position) {
+	return ov_pcm_seek_lap(&this->vorbisFile, position);
+}
+
+int vorbisdecoder::seek_time(double time) {
+	return ov_time_seek_lap(&this->vorbisFile, time);
+}
+
+int vorbisdecoder::get_bitrate() {
+	return ov_bitrate(&this->vorbisFile, -1);
+}
+
 bool vorbisdecoder::checkRunning() {
 	mutexLock(&this->decodeStatusLock);
 	condvarWaitTimeout(&this->decodeStatusCV,100000);
 	bool tmp = this->decodeRunning;
+	this->Metadata.currtime = floor(this->tell_time());
 	mutexUnlock(&this->decodeStatusLock);
 	return tmp;
 }
@@ -117,7 +140,6 @@ void vorbisdecoder::main_thread(void *) {
 		long retval = ov_read(&this->vorbisFile,(char *)this->decodeBuffer,this->decodeBufferSize,0,2,1,&this->section);
 
 		if (retval == 0) {
-			//this->resamplerData.end_of_input = 1;
 			mutexLock(&this->decodeStatusLock);
 			this->decodeRunning = false;
 			condvarWakeAll(&this->decodeStatusCV);
@@ -129,12 +151,11 @@ void vorbisdecoder::main_thread(void *) {
 			mutexUnlock(&this->decodeStatusLock);
 			this->decoderError = "VORBIS: Decode error " + to_string(retval);
 		} else {
-			
-			//src_short_to_float_array(this->decodeBuffer, this->resamplingBufferIn, this->decodeBufferSize);
-			//this->resamplerData.data_in = this->resamplingBufferIn;
-			//this->resamplerData.data_out = this->resamplingBufferOut;
-			//src_process(this->resamplerState, &this->resamplerData);			
-			//src_float_to_short_array(this->resamplingBufferOut, this->resampledBuffer, BUFFERSIZE);
+			//if (this->info->rate != 48000) {
+				//u32 target_size = ((48000/FRAMERATE) * BYTESPERSAMPLE * this->info->channels)
+				//rbuffer *s16 = malloc(target_size);
+				//do_resample(this->decodeBuffer, rbuffer, this->info->rate, 48000, this->decodeBufferSize, target_size);
+			//}	
 			int x = fillPlayBuffer(this->decodeBuffer, retval/2);
 			if (x == -1) { // buffer overflow. Wait before trying again.
 				while (x == -1) {

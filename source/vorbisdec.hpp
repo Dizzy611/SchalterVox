@@ -18,6 +18,13 @@ class vorbisdecoder : public decoder {
 		~vorbisdecoder();
 		void start();
 		void stop();
+		long tell();
+		long tell_time();
+ 		long length();
+		long length_time();
+		int seek(long position);
+		int seek_time(double time);
+		int get_bitrate();
 		bool checkRunning();
 		vorbis_info* info;
 		vorbis_comment* comment;

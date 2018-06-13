@@ -38,3 +38,32 @@ int findFilesByExt(const string& path, const string& ext, vector<string> &out) {
 		return errno;
 	}
 }
+
+string timeFromSeconds(int seconds) {
+	string retval = "";
+	int isec = seconds%60;
+	int imin = (isec/60)%60;
+	int ihr = isec/(60*60)%24;
+	int iday = isec/(60*60*24)%365;
+	int iyr = isec/(60*60*24*365);
+	char tmpbuf[4];
+	sprintf(tmpbuf, "%02d", isec);
+	retval += tmpbuf;
+	if (seconds > 59) {
+		sprintf(tmpbuf, "%02d:", imin);
+		retval.insert(0, tmpbuf);
+	} 
+	if (seconds > 3599) {
+		sprintf(tmpbuf, "%02d:", ihr);
+		retval.insert(0, tmpbuf);
+	}
+	if (seconds > 86399) {
+		sprintf(tmpbuf, "%02d:", iday);
+		retval.insert(0, tmpbuf);
+	}
+	if (seconds > 31535999) {
+		sprintf(tmpbuf, "%02d:", iyr);
+		retval.insert(0, tmpbuf);
+	}
+	return retval;
+}
