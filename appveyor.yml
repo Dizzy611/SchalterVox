@@ -21,12 +21,12 @@ artifacts:
     name: SchalterVox
 deploy:
   release: SchalterVox-$(APPVEYOR_BUILD_VERSION)
-  description: 'SchalterVox Media Player - Nightly AppVeyor Build'
+  description: 'SchalterVox Media Player - AppVeyor Build'
   provider: GitHub
   auth_token:
     secure: GZjRDISrpqmTNVinnfQ2vCSrwYUBsukPJGaBSkojxhP3OpfGmxEGhkHW8fmcDcud
   artifact: SchalterVox.zip
-  draft: true
+  draft: false
   prerelease: true
   on:
     branch: master
