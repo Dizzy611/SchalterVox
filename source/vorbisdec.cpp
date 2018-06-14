@@ -10,7 +10,6 @@
 #include "audiofile.hpp"
 #include "playback.hpp"
 #include "vorbisdec.hpp"
-#include "resampler.hpp"
 
 #define SAMPLERATE 48000
 #define CHANNELCOUNT 2
@@ -151,24 +150,11 @@ void vorbisdecoder::main_thread(void *) {
 			mutexUnlock(&this->decodeStatusLock);
 			this->decoderError = "VORBIS: Decode error " + to_string(retval);
 		} else {
-			if (this->info->rate != SAMPLERATE) {
-				u32 target_size = ceil((double)retval * (this->info->rate/SAMPLERATE));
-				s16* rbuffer = (s16*) malloc(target_size);
-				do_resample(this->decodeBuffer, rbuffer, this->info->rate, retval, target_size);
-				int x = fillPlayBuffer(rbuffer, retval/2);
-				if (x == -1) { // buffer overflow. Wait before trying again.
-					while (x == -1) {
-						svcSleepThread((FRAMEMS * 1000000)/4);
-						x = fillPlayBuffer(rbuffer, retval/2);
-					}
-				}
-			} else {
-				int x = fillPlayBuffer(this->decodeBuffer, retval/2);
-				if (x == -1) { // buffer overflow. Wait before trying again.
-					while (x == -1) {
-						svcSleepThread((FRAMEMS * 1000000)/4);
-						x = fillPlayBuffer(this->decodeBuffer, retval/2);
-					}
+			int x = fillPlayBuffer(this->decodeBuffer, retval/2);
+			if (x == -1) { // buffer overflow. Wait before trying again.
+				while (x == -1) {
+					svcSleepThread((FRAMEMS * 1000000)/4);
+					x = fillPlayBuffer(this->decodeBuffer, retval/2);
 				}
 			}
 		}

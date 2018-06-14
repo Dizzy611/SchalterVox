@@ -4,6 +4,7 @@
 #include "audiofile.hpp"
 #include "util.hpp"
 #include "vorbisdec.hpp"
+#include "playback.hpp"
 
 audioFile::audioFile(const string& filename) {
 	this->Metadata.filename = filename;
@@ -37,6 +38,7 @@ void audioFile::loadFile() {
 		}
 		this->Metadata.channels = vd->info->channels;
 		this->Metadata.samplerate = vd->info->rate;
+		set_samplerate(vd->info->rate);
 		this->Metadata.bitrate = vd->info->bitrate_nominal;
 		this->Metadata.length = vd->length_time();
 		for (int i=0; i<(vd->comment->comments); i++) {

@@ -14,6 +14,7 @@ static bool flushing=false;
 static Thread playback_thread;
 static Mutex aStatusLock;
 static CondVar aStatusCV;
+static int current_samplerate=AUDIO_SAMPLERATE;
 
 void start_playback() {
 	atb = (u32 *)malloc(ATB_SIZE * sizeof(u32));
@@ -26,6 +27,12 @@ void start_playback() {
 	playing = true;
 	threadCreate(&playback_thread, playback_thread_main, NULL, 0x10000, 0x2B, 2);
 	threadStart(&playback_thread);
+}
+
+void set_samplerate(int sr) {
+	mutexLock(&aLock);
+	current_samplerate = sr;
+	mutexUnlock(&aLock);
 }
 
 void stop_playback(bool playout) {
@@ -106,21 +113,28 @@ void playback_thread_main(void *) {
 			condvarWakeAll(&aStatusCV);
 			mutexUnlock(&aStatusLock);
 			u32 size;
+			
 			if (atbUsed < AUDIO_BUFFER_SAMPLES) {
 				size = atbUsed * sizeof(u32);
 			} else {
 				size = AUDIO_BUFFER_SAMPLES * sizeof(u32);
 			}
-			memcpy(released->buffer, atb, size);
-			if (size == 0) {
-				released->data_size = AUDIO_BUFFER_SAMPLES * sizeof(u32);
+			
+			if (AUDIO_SAMPLERATE == current_samplerate) { // If we're matched samplerate, just blast right into the switch.
+				memcpy(released->buffer, atb, size);
+				if (size == 0) {
+					released->data_size = AUDIO_BUFFER_SAMPLES * sizeof(u32);
+				} else {
+					released->data_size = size;
+				}
+				atbUsed -= size / sizeof(u32);
+				memmove(atb, atb + (size / sizeof(u32)), atbUsed * sizeof(u32));
 			} else {
-				released->data_size = size;
+				resampleBuffer((short*)released->buffer, AUDIO_BUFFER_SAMPLES);
+				int outsize = (size * current_samplerate) / (sizeof(u32) * AUDIO_SAMPLERATE); 
+				atbUsed -= outsize;
+				memmove(atb, atb + outsize, atbUsed * sizeof(u32));
 			}
-			atbUsed -= size / sizeof(u32);
-			memmove(atb, atb + (size / sizeof(u32)), atbUsed * sizeof(u32));
-			
-			
 			audoutAppendAudioOutBuffer(released);
 		} else {
 			mutexLock(&aStatusLock);
@@ -154,4 +168,38 @@ int fillPlayBuffer(int16_t *inBuffer, int length) {
 	atbUsed += length / 2;
 	mutexUnlock(&aLock);
 	return 0;
+}
+
+
+void resampleBuffer(short* out, int numSamples) {
+	short *s_atb = reinterpret_cast<short *>(atb);
+	unsigned long long m_mixPtr=0;
+	int resampleDelta=((current_samplerate*0x40000ull)/AUDIO_SAMPLERATE);
+	
+	for(int i=0; i<numSamples; i++) {
+		
+		int idx = m_mixPtr >> 18;
+		int s1 = s_atb[(idx)*2];
+		int s2 = s_atb[(idx+1)*2];
+		int interp = m_mixPtr & 0x3ffff;
+		long long int sRamp = s2-s1;
+		sRamp *= interp;
+		sRamp >>= 18;
+		sRamp += s1;
+		if(sRamp > 32767) sRamp = 32767;
+		if(sRamp < -32768) sRamp = -32768;
+		out[(i*2)] = (short)sRamp;
+		
+		s1 = s_atb[(idx*2)+1];
+		s2 = s_atb[((idx+1)*2)+1];
+		sRamp = s2-s1;
+		sRamp *= interp;
+		sRamp >>= 18;
+		sRamp += s1;
+		if(sRamp > 32767) sRamp = 32767;
+		if(sRamp < -32768) sRamp = -32768;
+		out[((i*2)+1)] = (short)sRamp;
+		
+		m_mixPtr += resampleDelta;
+	}
 }
