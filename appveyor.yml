@@ -1,4 +1,3 @@
-version: 0.1.{build}-{branch}
 branches:
   only:
   - master
@@ -8,6 +7,9 @@ services:
 init:
   - docker pull devkitpro/devkita64
 install:
+  - ps: |
+      $version = Get-Date -Format "mmddyyyy-HHmm"
+      Update-AppveyorBuild -Version "0.1-$version"
   - ls -al
   - docker run --mount type=bind,source="$(pwd)",target=/home -w/home devkitpro/devkita64 make
   - mkdir media
