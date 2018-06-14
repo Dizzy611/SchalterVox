@@ -8,10 +8,10 @@ init:
   - docker pull devkitpro/devkita64
 install:
   - ps: |
-      $version = Get-Date -Format "mmddyyyy-HHmm"
+      $version = Get-Date -Format "yyyyddMM-HHmmss"
       Update-AppveyorBuild -Version "0.1-$version"
   - ls -al
-  - docker run --mount type=bind,source="$(pwd)",target=/home -w/home devkitpro/devkita64 make
+  - docker run --mount type=bind,source="$(pwd)",target=/home/SchalterVox -w/home/SchalterVox devkitpro/devkita64 make
   - mkdir media
   - touch media/oggs_go_here
   - 7z a -r SchalterVox.zip SchalterVox.nro media
@@ -25,7 +25,7 @@ deploy:
   provider: GitHub
   auth_token:
     secure: GZjRDISrpqmTNVinnfQ2vCSrwYUBsukPJGaBSkojxhP3OpfGmxEGhkHW8fmcDcud
-  artifact: \.*\.zip/
+  artifact: SchalterVox.zip
   draft: true
   prerelease: true
   on:
