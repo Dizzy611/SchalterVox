@@ -1,4 +1,5 @@
 [![Build status](https://ci.appveyor.com/api/projects/status/w251kvnbnka3h00o/branch/master?svg=true)](https://ci.appveyor.com/project/Insidious611/schaltervox/branch/master)
+
 If the build is passing, see "Releases" for the latest release. Please be aware SchalterVox is still Alpha code and is lacking a proper UI or transport controls.
 
 # SchalterVox
