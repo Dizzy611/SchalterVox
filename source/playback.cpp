@@ -7,7 +7,7 @@
 #include <cmath>
 
 static int atbUsed = 0;
-static u32 *atb;
+static s16 *atb;
 static Mutex aLock;
 static bool playing=false;
 static bool flushing=false;
@@ -17,7 +17,7 @@ static CondVar aStatusCV;
 static int current_samplerate=AUDIO_SAMPLERATE;
 
 void start_playback() {
-	atb = (u32 *)malloc(ATB_SIZE * sizeof(u32));
+	atb = (s16 *)malloc(ATB_SIZE * sizeof(u32));
 	mutexInit(&aLock);
 	mutexInit(&aStatusLock);
 	condvarInit(&aStatusCV, &aStatusLock);
@@ -83,9 +83,9 @@ void playback_thread_main(void *) {
 	AudioOutBuffer sources[4];	
 	
 	u32 rdata_size = (AUDIO_BUFFER_SAMPLES * sizeof(u32) + 0xfff) & ~0xfff;
-	u32 *rdata[4];
+	s16 *rdata[4];
 	for (int i = 0; i < 4; i++) {
-		rdata[i] = (u32 *)memalign(0x1000, rdata_size);
+		rdata[i] = (s16 *)memalign(0x1000, rdata_size);
 		memset(rdata[i], 0, rdata_size);
 		sources[i].next = 0;
 		sources[i].buffer = rdata[i];
