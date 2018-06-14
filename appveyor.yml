@@ -1,3 +1,4 @@
+skip_tags: true
 branches:
   only:
   - master
