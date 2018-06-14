@@ -55,7 +55,10 @@ void input_handler::main_thread(void *) {
 void input_handler::process_signals(u64 key_down) {
 	if (key_down & KEY_PLUS) {
 		this->signals = this->signals | SIG_STOPQUIT;
-	} // Add more signals here as needed
+	}
+	if ((key_down & KEY_DRIGHT) || (key_down & KEY_ZR) || (key_down & KEY_R) || (key_down & KEY_SR)) {
+		this->signals = this->signals | SIG_NEXT;
+	}// Add more signals here as needed
 }
 
 u32 input_handler::get_signals() {
