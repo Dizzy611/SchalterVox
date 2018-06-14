@@ -7,7 +7,7 @@
 #include <cmath>
 
 static int atbUsed = 0;
-static s16 *atb;
+static u32 *atb;
 static Mutex aLock;
 static bool playing=false;
 static bool flushing=false;
@@ -17,7 +17,7 @@ static CondVar aStatusCV;
 static int current_samplerate=AUDIO_SAMPLERATE;
 
 void start_playback() {
-	atb = (s16 *)malloc(ATB_SIZE * sizeof(u32));
+	atb = (u32 *)malloc(ATB_SIZE * sizeof(u32));
 	mutexInit(&aLock);
 	mutexInit(&aStatusLock);
 	condvarInit(&aStatusCV, &aStatusLock);
@@ -83,9 +83,9 @@ void playback_thread_main(void *) {
 	AudioOutBuffer sources[4];	
 	
 	u32 rdata_size = (AUDIO_BUFFER_SAMPLES * sizeof(u32) + 0xfff) & ~0xfff;
-	s16 *rdata[4];
+	u32 *rdata[4];
 	for (int i = 0; i < 4; i++) {
-		rdata[i] = (s16 *)memalign(0x1000, rdata_size);
+		rdata[i] = (u32 *)memalign(0x1000, rdata_size);
 		memset(rdata[i], 0, rdata_size);
 		sources[i].next = 0;
 		sources[i].buffer = rdata[i];
@@ -120,21 +120,21 @@ void playback_thread_main(void *) {
 				size = AUDIO_BUFFER_SAMPLES * sizeof(u32);
 			}
 			
-			//if (AUDIO_SAMPLERATE == current_samplerate) { // If we're matched samplerate, just blast right into the switch.
-			//	memcpy(released->buffer, atb, size);
-			//	if (size == 0) {
-			//		released->data_size = AUDIO_BUFFER_SAMPLES * sizeof(u32);
-			//	} else {
-			//		released->data_size = size;
-			//	}
-			//	atbUsed -= size / sizeof(u32);
-			//	memmove(atb, atb + (size / sizeof(u32)), atbUsed * sizeof(u32));
-			//} else {
+			if (AUDIO_SAMPLERATE == current_samplerate) { // If we're matched samplerate, just blast right into the switch.
+				memcpy(released->buffer, atb, size);
+				if (size == 0) {
+					released->data_size = AUDIO_BUFFER_SAMPLES * sizeof(u32);
+				} else {
+					released->data_size = size;
+				}
+				atbUsed -= size / sizeof(u32);
+				memmove(atb, atb + (size / sizeof(u32)), atbUsed * sizeof(u32));
+			} else {
 				resampleBuffer((short*)released->buffer, AUDIO_BUFFER_SAMPLES);
 				int outsize = (size * current_samplerate) / (sizeof(u32) * AUDIO_SAMPLERATE); 
 				atbUsed -= outsize;
 				memmove(atb, atb + outsize, atbUsed * sizeof(u32));
-			//}
+			}
 			audoutAppendAudioOutBuffer(released);
 		} else {
 			mutexLock(&aStatusLock);
@@ -172,14 +172,15 @@ int fillPlayBuffer(int16_t *inBuffer, int length) {
 
 
 void resampleBuffer(short* out, int numSamples) {
+	short *s_atb = reinterpret_cast<short *>(atb);
 	unsigned long long m_mixPtr=0;
 	int resampleDelta=((current_samplerate*0x40000ull)/AUDIO_SAMPLERATE);
 	
 	for(int i=0; i<numSamples; i++) {
 		
 		int idx = m_mixPtr >> 18;
-		int s1 = atb[(idx)*2];
-		int s2 = atb[(idx+1)*2];
+		int s1 = s_atb[(idx)*2];
+		int s2 = s_atb[(idx+1)*2];
 		int interp = m_mixPtr & 0x3ffff;
 		long long int sRamp = s2-s1;
 		sRamp *= interp;
@@ -189,8 +190,8 @@ void resampleBuffer(short* out, int numSamples) {
 		if(sRamp < -32768) sRamp = -32768;
 		out[(i*2)] = (short)sRamp;
 		
-		s1 = atb[(idx*2)+1];
-		s2 = atb[((idx+1)*2)+1];
+		s1 = s_atb[(idx*2)+1];
+		s2 = s_atb[((idx+1)*2)+1];
 		sRamp = s2-s1;
 		sRamp *= interp;
 		sRamp >>= 18;
