@@ -9,7 +9,7 @@ init:
 install:
   - ps: |
       $version = Get-Date -Format "yyyyddMM-HHmmss"
-      Update-AppveyorBuild -Version "0.1-$version"
+      Update-AppveyorBuild -Version "$version"
   - ls -al
   - docker run --mount type=bind,source="$(pwd)",target=/home/SchalterVox -w/home/SchalterVox devkitpro/devkita64 make
   - mkdir media
@@ -20,7 +20,7 @@ artifacts:
   - path: SchalterVox.zip
     name: SchalterVox
 deploy:
-  release: SchalterVox-v$(appveyor_build_version)
+  release: SchalterVox-v$(APPVEYOR_BUILD_VERSION)
   description: 'SchalterVox Media Player - Nightly AppVeyor Build'
   provider: GitHub
   auth_token:
