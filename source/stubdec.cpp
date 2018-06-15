@@ -1,3 +1,5 @@
+// This file and the accompanying header are stubs intended
+// to show how to program a decoder to work with SchalterVox.
 #include <switch.h>
 #include <stdio.h>
 #include <errno.h>
@@ -21,9 +23,9 @@ using namespace std;
 	
 stubdecoder::stubdecoder(const string& fileName) {
 	mutexLock(&this->decodeLock);
-	// some sort of fopen should be done here, and information important to audioFile should be populated at the least.
-	int rate=48000; // this should be grabbed from the file
-	inr channels=2; // as should this
+	// the file should be opened and metadata structures populated here
+	this->parse_metadata();
+	
 	this->decodeBufferSize = (rate/FRAMERATE) * BYTESPERSAMPLE * channels);
 	this->decodeBuffer = (s16 *) malloc(this->decodeBufferSize);
 	this->decodeRunning = false;
@@ -53,26 +55,6 @@ void stubdecoder::stop() { // this function should stay pretty much as is
 	threadWaitForExit(&this->decodingThread);
 }
 
-long stubdecoder::tell() {
-	// this should return the current position in terms of PCM samples.
-	return 0;
-}
-
-long stubdecoder::tell_time() {
-	// this should return the current position in terms of seconds.
-	return 0;
-}
-
-long stubdecoder::length() {
-	// this should return the total length of the file in terms of PCM samples.
-	return 0; 
-}
-
-long stubdecoder::length_time() {
-	// this should return the total length of the file in terms of seconds.
-	return 0;
-}
-
 int stubdecoder::seek(long position) {
 	// this should seek to a certain position in terms of PCM samples.
 	return 1;
@@ -83,14 +65,7 @@ int stubdecoder::seek_time(double time) {
 	return 1;
 }
 
-int stubdecoder::get_bitrate() {
-	// this should give a bitrate, or a VBR quality. Numbers 10 and below are 
-	// assumed by AudioFile to be some sort of VBR quality and well be treated 
-	// accordingly.
-	return 0;
-}
-
-bool stubdecoder::checkRunning() { // this function should stay pretty much as is
+bool stubdecoder::check_running() { // this function should stay pretty much as is
 	mutexLock(&this->decodeStatusLock);
 	condvarWaitTimeout(&this->decodeStatusCV,100000);
 	bool tmp = this->decodeRunning;
@@ -138,12 +113,26 @@ void stubdecoder::main_thread(void *) { // this function can be heavily modified
 			}
 		}
 		mutexUnlock(&this->decodeLock);
-		
 		svcSleepThread(1000); //1000ns sleep just to reduce load on CPU. can be removed if necessary.
-		
+
+		this->update_metadata(); // This should update e.g. the current time and any 
+		                         // other variables that have changed. Do as little 
+						         // as possible to avoid crashes.		
 		mutexLock(&this->decodeStatusLock);
 		running = this->decodeRunning;
 	}
 	condvarWakeAll(&this->decodeStatusCV);
 	mutexUnlock(&this->decodeStatusLock);
+}
+
+void stubdecoder::parse_metadata() {
+	metadata_t m = this->metadata;
+	// Populate the metadata_t struct. See metadata.hpp
+	this->set_metadata(m, true);
+}
+
+void stubdecoder::update_metadata() {
+	metadata_t m = this->metadata();
+	// Update parts of the metadata_t struct that have changed.
+	this->set_metadata(m, false);
 }
