@@ -1,134 +1,71 @@
 #include <switch.h>
 #include <sstream>
 #include <string>
+
+#define IN_AUDIOFILE
+#include "decoder.hpp"
 #include "audiofile.hpp"
 #include "util.hpp"
-#include "vorbisdec.hpp"
 #include "playback.hpp"
+#include "metadata.hpp"
+
+// passed to decoder.hpp to make it pull in all the decoders.
+
+#include "audiofile.hpp"
 
 audioFile::audioFile(const string& filename) {
-	this->Metadata.filename = filename;
-	this->Metadata.filetype = getFileExt(filename);
-	this->Metadata.title = "Unknown";
-	this->Metadata.artist = "Unknown";
-	this->Metadata.album = "Unknown";
-	this->Metadata.bitrate = 0;
-	this->Metadata.samplerate = 48000;
-	this->Metadata.channels = 2;
-	this->Metadata.bitdepth = 16;
-	this->Metadata.length = 0;
-	this->Metadata.currtime = 0;
-	this->Metadata.fancyftype = "Unknown";
+	this->metadata.filename = filename;
+	this->metadata.filetype = getFileExt(filename);
+	this->metadata.title = "Unknown";
+	this->metadata.artist = "Unknown";
+	this->metadata.album = "Unknown";
+	this->metadata.bitrate = 0;
+	this->metadata.samplerate = 48000;
+	this->metadata.channels = 2;
+	this->metadata.bitdepth = 16;
+	this->metadata.length = 0;
+	this->metadata.currtime = 0;
+	this->metadata.fancyftype = "Unknown";
 }
 
 audioFile::~audioFile() {
 	delete this->Decoder;
 }
 
-void audioFile::loadFile() {
-	string filetype = this->Metadata.filetype;
+void audioFile::load_file() {
+	string filetype = this->metadata.filetype;
+
 	if (filetype == "ogg") {
-		this->Metadata.fancyftype = "OGG Vorbis";
-		this->Decoder = new vorbisdecoder(this->Metadata.filename);
-		vorbisdecoder *vd = (vorbisdecoder*)this->Decoder;
-		if (!vd->decoderValid) {
-			printf("ERROR: %s \n", vd->decoderError.c_str());
-			abort_playback();
-			return;
-		}
-		this->Metadata.channels = vd->info->channels;
-		this->Metadata.samplerate = vd->info->rate;
-		set_samplerate(vd->info->rate);
-		this->Metadata.bitrate = vd->info->bitrate_nominal;
-		this->Metadata.length = vd->length_time();
-		for (int i=0; i<(vd->comment->comments); i++) {
-			vorbis_tags vt = vorbis_comment_split(vd->comment->user_comments[i]);
-			if (vt.header == "ARTIST") {
-				this->Metadata.artist = vt.body;
-			} else if (vt.header == "ALBUM") {
-				this->Metadata.album = vt.body;
-			} else if (vt.header == "TITLE") {
-				this->Metadata.title = vt.body;
-			} else {
-				this->Metadata.other.push_back(vd->comment->user_comments[i]);
-			}
-		}
+		this->Decoder = new vorbisdecoder(this->metadata.filename);
 	} else if (filetype == "mp3") {
-		// TODO
+		// this->Decoder = new mp3decoder(this->metadata.filename);
 	} else if (filetype == "flac") {
-		// TODO
+		// this->Decoder = new flacdecoder(this->metadata.filename);
 	} else if (filetype == "wav") {
-		// TODO
+		// this->Decoder = new wavdecoder(this->metadata.filename);
 	} else if ((filetype == "mod") || (filetype == "it") || (filetype == "s3m") || (filetype == "xm")) {
-		// TODO
+		// this->Decoder = new moddecoder(this->metadata.filename);
+	}
+	
+	
+	if (!this->Decoder->decoderValid) {
+		printf("ERROR CREATING DECODER: %s", this->Decoder->decoderError.c_str());
+		abort_playback();
+		return;
 	}
 }
 
-float audioFile::secondsFromSamples(int samples) {
-	int samplerate = this->Metadata.samplerate;
-	float seconds = (samples*1.0)/(samplerate*1.0);
-	return seconds;
+void audioFile::update_metadata(bool firstrun) {
+	if (firstrun) {
+		this->metadata = this->Decoder->get_metadata(firstrun);
+	} else {
+		metadata_t m = this->Decoder->get_metadata(firstrun);
+		this->metadata.bitrate = m.bitrate;
+		this->metadata.samplerate = m.samplerate;
+		this->metadata.length = m.length;
+		this->metadata.length_pcm = m.length_pcm;
+		this->metadata.currtime = m.currtime;
+		this->metadata.currpcm = m.currpcm;
+	}
 }
 
-
-int audioFile::samplesFromSeconds(float seconds) {
-	return (int)seconds*this->Metadata.samplerate;
-}
-
-decoder::decoder() {
-	this->decoderValid = false;
-	this->decoderError = "";
-	condvarInit(&this->decodeStatusCV, &this->decodeStatusLock);
-	mutexLock(&this->decodeLock);
-	mutexUnlock(&this->decodeLock);
-	this->Metadata.filename = "Unknown";
-	this->Metadata.filetype = "Unknown";
-	this->Metadata.title = "Unknown";
-	this->Metadata.artist = "Unknown";
-	this->Metadata.album = "Unknown";
-	this->Metadata.bitrate = 0;
-	this->Metadata.samplerate = 48000;
-	this->Metadata.channels = 2;
-	this->Metadata.bitdepth = 16;
-	this->Metadata.length = 0;
-	this->Metadata.currtime = 0;
-	this->Metadata.fancyftype = "Unknown";
-}
-
-
-decoder::~decoder() {
-}
-
-// Here there be stubs. These are all 'defaults' for virtual functions intended to be overridden by specific decoders.
-
-void decoder::start() {} // Should start the decode thread, and begin filling the playback buffer with fillPlayBuffer
-
-void decoder::stop() {} // Should stop the decode thread.
-
-bool decoder::checkRunning() { return false; } // Should return whether or not the decode thread is active.
-
-long decoder::tell() { return 0; } // Should return current position in PCM samples.
-
-long decoder::tell_time() { // Should return current position in seconds.
-	return 0;
-}
-
-long decoder::length() { // Should return total length in PCM samples.
-	return 0;
-}
-
-long decoder::length_time() { // Should return total length in seconds.
-	return 0;
-}
-
-int decoder::seek(long position) { // Should seek to a position given in PCM samples.
-	return 0;
-}
-
-int decoder::seek_time(double time) { // Should seek to a position given in seconds.
-	return 0;
-}
-
-int decoder::get_bitrate() { // Should return the average bitrate, constant bitrate, or VBR setting (values below 10 will be assumed to be a VBR setting)
-	return 0;
-}
