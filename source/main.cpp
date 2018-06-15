@@ -69,30 +69,40 @@ int audioLoop(const string& musicfile) {
 	af->update_metadata(true);
 	af->Decoder->start();
 	
+	consoleClear();
+	string outstr = "";
+		
+	outstr += "SchalterVox Alpha\nNow Playing: "; //row0 end
+	
+	string tmp;
+	if (af->metadata.artist != "Unknown") {
+		tmp = af->metadata.artist + " - " + af->metadata.title;
+	} else { 
+		tmp = af->metadata.title;
+	}
+	if (tmp.length()>80) {
+		tmp.resize(76);
+		tmp = tmp + "...";
+	}
+	outstr += tmp + "\n"; //row1 end
+	if (af->metadata.album != "Unknown") {
+		outstr += "Album: ";
+		outstr += af->metadata.album;		
+	}
+	outstr += "\n"; //row2 end
+
+	outstr += to_string(af->metadata.bitrate) + "kbps ";
+	outstr += to_string(af->metadata.samplerate) + "Hz ";
+	outstr += to_string(af->metadata.bitdepth) + "bit ";
+	outstr += name_channels(af->metadata.channels); 
+	outstr += " " + af->metadata.fancyftype + "\n"; //row3 end
+	printf(outstr.c_str());
 
 	while (active) {
-		consoleClear();
 		af->update_metadata(false);
-		string outstr = "";
-		
-		outstr += "SchalterVox Alpha\nNow Playing: ";
-
-		if (af->metadata.artist != "Unknown") {
-			outstr += af->metadata.artist + " - " + af->metadata.title;
-		} else {
-			outstr += af->metadata.title;
-		}
-		outstr += "\n";
-		if (af->metadata.album != "Unknown") {
-			outstr += "Album: ";
-			outstr += af->metadata.album;
-			outstr += "\n";
-		}
-		outstr += to_string(af->metadata.bitrate) + "kbps ";
-		outstr += to_string(af->metadata.samplerate) + "Hz ";
-		outstr += to_string(af->metadata.bitdepth) + "bit ";
-		outstr += name_channels(af->metadata.channels);
-		outstr += " " + af->metadata.fancyftype + "\nTime: ";
+		outstr = "";
+		printf("\x1b[5;0H"); // move to the 5th row, first column		
+		outstr += "Time: ";
 		outstr += convert_time(af->metadata.currtime);
 		outstr += "/";
 		outstr += convert_time(af->metadata.length);
