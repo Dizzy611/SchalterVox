@@ -28,7 +28,184 @@ long calculate_length(int bitrate, long filesize) { // This only works properly 
 	return filesize/byterate;
 }
 
-id3 parse_id3_tags(const string& fileName) {
+void float_to_s16(float* in, s16* out, int length) {
+	for (int i = 0; i<length; i++) {
+		out[i] = in[i] * 32767;
+	}
+}
+
+void mp3decoder::update_length() {
+	metadata_t m = this->metadata;
+	m.bitrate = mp3.frameInfo.bitrate_kbps;
+	this->brA += this->metadata.bitrate;
+	this->brD++;
+	
+	// this may be off due to frame headers being 32 bits every frame
+	// but counting frames is difficult and I'm not certain the MP3 bitrate
+	// isn't already taking overhead into account.
+	int avg_byterate = (this->brA/this->brD)*1024/8;
+	m.length = this->fileSize/avg_byterate;
+	m.length_pcm = m.length*m.samplerate;
+	
+	this->set_metadata(m);
+}
+	
+	
+void mp3decoder::parse_metadata() {
+	this->update_length();
+	metadata_t m = this->metadata;
+	this->rawid3 = parse_id3_tags(fileName);
+
+	m.artist = get_id3_tag(this->rawid3, artist);
+	m.album = get_id3_tag(this->rawid3, album);
+	this->metadata.title = get_id3_tag(this->rawid3, title); 
+	// WARN: dunno if these frameinfo bits are accurate before a single frame has been read. Guess we'll find out!
+	this->metadata.bitrate = mp3.frameInfo.bitrate_kbps;
+	this->metadata.length = calculate_length(this->metadata.bitrate, this->fileSize);
+	this->metadata.in_rate = mp3.frameInfo.hz;
+	this->metadata.in_channels = mp3.frameInfo.channels;
+
+	}
+
+mp3decoder::mp3decoder(const string& fileName) {
+	mutexLock(&this->decodeLock);
+
+	// drmp3 does its own resampling and up/downmixing, so we set it up to use this instead of ours.
+	drmp3_config mp3config;
+	mp3config.outputChannels = 2;
+	mp3config.outputSampleRate = SAMPLERATE;
+	this->fileSize = 0;
+
+	// determine filesize for checking length. this will only work on CBR files, but dr_mp3 doesn't have a better way.
+	FILE *tmp=fopen(fileName.c_str(), "r");
+	if (tmp!=NULL) {
+		fseek(tmp, 0, SEEK_END);
+		this->fileSize = ftell(tmp);
+		fclose(tmp);
+	}
+		
+	if (!drmp3_init_file(&this->mp3, fileName.c_str(), &mp3config)) {
+		this->decoderValid = false;
+		this->decodeRunning = false;
+		return;
+	}
+	
+	this->brA = 0; // bitrate accumulator and denominator
+	this->brD = 0; // used for getting a more accurate length 
+                   // the further we are in a file (in a VBR/ABR situation)
+	this->metadata.out_channels = mp3config.outputChannels;
+	this->metadata.out_rate = mp3config.outputSampleRate;
+	this->metadata.bit_rate = 0;
+	this->metadata.in_rate = 0;
+	this->metadata.in_channels = 0;
+	this->metadata.current_time = 0;
+	this->metadata.length = 0; // can't get this until we get bitrate, which we get with the first frame.
+	this->metadata.bit_depth = 16;
+	this->numFrames = (this->metadata.out_rate/FRAMERATE);
+
+	this->decodeBufferSize = (this->numFrames * BYTESPERSAMPLE * this->metadata.out_channels);
+	this->decodeBuffer = (s16 *) malloc(this->decodeBufferSize);
+	this->floatBufferSize = (this->numFrames * this->metadata.out_channels * sizeof(float));
+	this->floatBuffer = (float *) malloc(this->floatBufferSize);
+
+	this->decodeRunning = false;
+	this->decoderValid = true; // set this to false if any step fails to validate
+
+	mutexUnlock(&this->decodeLock);
+}
+		
+mp3decoder::~mp3decoder() {
+	mutexLock(&this->decodeLock);
+	this->decodeRunning = false;
+	free(this->decodeBuffer);
+	free(this->floatBuffer);
+	drmp3_uninit(&this->mp3);
+	mutexUnlock(&this->decodeLock);
+}
+
+void mp3decoder::start() { 
+	this->decodeRunning = true;
+	threadCreate(&this->decodingThread, mp3decoder_trampoline, this, 0x10000, 0x2D, 3);
+	threadStart(&this->decodingThread);
+}
+
+void mp3decoder::stop() { 
+	mutexLock(&this->decodeStatusLock);
+	condvarWait(&this->decodeStatusCV);
+	this->decodeRunning = false;
+	mutexUnlock(&this->decodeStatusLock);
+	threadWaitForExit(&this->decodingThread);
+}
+
+int mp3decoder::seek(long position) {
+	// this should seek to a certain position in terms of PCM samples.
+	return 1;
+}
+
+int mp3decoder::seek_time(double time) {
+	// this should seek to a certain position in terms of seconds.
+	return 1;
+}
+
+bool mp3decoder::checkRunning() {
+	mutexLock(&this->decodeStatusLock);
+	condvarWaitTimeout(&this->decodeStatusCV,100000);
+	bool tmp = this->decodeRunning;
+	this->Metadata.currtime = floor(this->tell_time());
+	mutexUnlock(&this->decodeStatusLock);
+	return tmp;
+}
+
+void mp3decoder_trampoline(void *parameter) {
+	mp3decoder* obj = (mp3decoder*)parameter;
+	obj->main_thread(NULL);
+}
+
+void mp3decoder::main_thread(void *) {
+	mutexLock(&this->decodeStatusLock);
+	this->decodeRunning=true;
+	bool running=this->decodeRunning;
+	
+	while (running) {
+		condvarWakeAll(&this->decodeStatusCV);
+		mutexUnlock(&this->decodeStatusLock);
+
+		mutexLock(&this->decodeLock);
+		u64 retframes = drmp3_read_f32(&this->mp3, this->numFrames, this->floatBuffer);
+		this->convert_buffer();
+		u32 retval = (retframes * BYTESPERSAMPLE * this->metadata.out_channels);
+		if (retframes == 0) { // a 0 should mean EOF.
+			mutexLock(&this->decodeStatusLock);
+			this->decodeRunning = false;
+			condvarWakeAll(&this->decodeStatusCV);
+			mutexUnlock(&this->decodeStatusLock);
+		} else {
+			int x = fillPlayBuffer(this->decodeBuffer, retval/2);
+			if (x == -1) { // buffer overflow. Wait before trying again.
+				while (x == -1) {
+					svcSleepThread((FRAMEMS * 1000000)/4);
+					x = fillPlayBuffer(this->decodeBuffer, retval/2);
+				}
+			}
+		}
+		mutexUnlock(&this->decodeLock);
+		
+		svcSleepThread(1000); //1000ns sleep just to reduce load on CPU. can be removed if necessary.
+		
+		mutexLock(&this->decodeStatusLock);
+		running = this->decodeRunning;
+	}
+	condvarWakeAll(&this->decodeStatusCV);
+	mutexUnlock(&this->decodeStatusLock);
+}
+
+
+void mp3decoder::convert_buffer() {
+	float_to_s16(this->floatBuffer, this->decodeBuffer, (this->floatBufferSize/sizeof(float)));
+}
+
+
+id3 parse_id3_tags(const string& fileName) { // TODO: This code is a beast from hell, simplify it.
 	id3 retval;
 	retval.version = 0;
 	retval.v1_title[0] = '\0';
@@ -38,8 +215,8 @@ id3 parse_id3_tags(const string& fileName) {
 	retval.v1_tracknum = 0;
 	retval.v1_year = 0;
 	retval.v1_genre = 0;
-	
-	FILE* tmp=fopen(fileName.c_str(), "r");
+// Commented out so we can just focus on testing decodes.	
+/* 	FILE* tmp=fopen(fileName.c_str(), "r");
 	if (tmp==NULL) { 
 		return retval;
 	}
@@ -133,11 +310,11 @@ id3 parse_id3_tags(const string& fileName) {
 		}		
 		free(tagBuffer);
 	}
-	fclose(tmp);
+	fclose(tmp); */	
 	return retval;
 }
 
-string get_id3_tag(id3 tags, Basic_Tag request) {
+string get_id3_tag(id3 tags, Basic_Tag request) { // TODO: this thing is a fucking monster too. Simplify!
 	int version = tags.version;
 	if (version >= 2) {
 		
@@ -214,181 +391,4 @@ string get_id3_tag(id3 tags, Basic_Tag request) {
 		}
 	}
 	return "Unknown";
-}
-
-void float_to_s16(float* in, s16* out, int length) {
-	for (int i = 0; i<length; i++) {
-		out[i] = in[i] * 32767;
-	}
-}
-
-mp3decoder::mp3decoder(const string& fileName) {
-	mutexLock(&this->decodeLock);
-
-	// drmp3 does its own resampling and up/downmixing, so we set it up to use this instead of ours.
-	drmp3_config mp3config;
-	mp3config.outputChannels = 2;
-	mp3config.outputSampleRate = SAMPLERATE;
-	this->fileSize = 0;
-
-	// determine filesize for checking length. this will only work on CBR files, but dr_mp3 doesn't have a better way.
-	FILE *tmp=fopen(fileName.c_str(), "r");
-	if (tmp!=NULL) {
-		fseek(tmp, 0, SEEK_END);
-		this->fileSize = ftell(tmp);
-		fclose(tmp);
-	}
-	
-	// parse ID3 tags
-	this->rawid3 = parse_id3_tags(fileName);
-	this->metadata.artist = get_id3_tag(this->rawid3, artist);
-	this->metadata.album = get_id3_tag(this->rawid3, album);
-	this->metadata.title = get_id3_tag(this->rawid3, title);
-	
-	if (!drmp3_init_file(&this->mp3, fileName.c_str(), &mp3config)) {
-		this->decoderValid = false;
-		this->decodeRunning = false;
-		return;
-	}
-
-	this->metadata.out_channels = mp3config.outputChannels;
-	this->metadata.out_rate = mp3config.outputSampleRate;
-	this->metadata.bit_rate = 0;
-	this->metadata.in_rate = 0;
-	this->metadata.in_channels = 0;
-	this->metadata.current_time = 0;
-	this->metadata.length = 0; // can't get this until we get bitrate, which we get with the first frame.
-	this->metadata.bit_depth = 16;
-	this->numFrames = (this->metadata.out_rate/FRAMERATE);
-
-	this->decodeBufferSize = (this->numFrames * BYTESPERSAMPLE * this->metadata.out_channels);
-	this->decodeBuffer = (s16 *) malloc(this->decodeBufferSize);
-	this->floatBufferSize = (this->numFrames * this->metadata.out_channels * sizeof(float));
-	this->floatBuffer = (float *) malloc(this->floatBufferSize);
-
-	this->decodeRunning = false;
-	this->decoderValid = true; // set this to false if any step fails to validate
-
-	mutexUnlock(&this->decodeLock);
-}
-		
-mp3decoder::~mp3decoder() {
-	mutexLock(&this->decodeLock);
-	this->decodeRunning = false;
-	free(this->decodeBuffer);
-	free(this->floatBuffer);
-	drmp3_uninit(&this->mp3);
-	mutexUnlock(&this->decodeLock);
-}
-
-void mp3decoder::start() { 
-	this->decodeRunning = true;
-	threadCreate(&this->decodingThread, mp3decoder_trampoline, this, 0x10000, 0x2D, 3);
-	threadStart(&this->decodingThread);
-}
-
-void mp3decoder::stop() { 
-	mutexLock(&this->decodeStatusLock);
-	condvarWait(&this->decodeStatusCV);
-	this->decodeRunning = false;
-	mutexUnlock(&this->decodeStatusLock);
-	threadWaitForExit(&this->decodingThread);
-}
-
-long mp3decoder::tell() {
-	// this should return the current position in terms of PCM samples.
-	return 0;
-}
-
-long mp3decoder::tell_time() {
-	// this should return the current position in terms of seconds.
-	return 0;
-}
-
-long mp3decoder::length() {
-	// this should return the total length of the file in terms of PCM samples.
-	return 0; 
-}
-
-long mp3decoder::length_time() {
-	// this should return the total length of the file in terms of seconds.
-	return 0;
-}
-
-int mp3decoder::seek(long position) {
-	// this should seek to a certain position in terms of PCM samples.
-	return 1;
-}
-
-int mp3decoder::seek_time(double time) {
-	// this should seek to a certain position in terms of seconds.
-	return 1;
-}
-
-int mp3decoder::get_bitrate() {
-	// this should give a bitrate, or a VBR quality. Numbers 10 and below are 
-	// assumed by AudioFile to be some sort of VBR quality and well be treated 
-	// accordingly.
-	return 0;
-}
-
-bool mp3decoder::checkRunning() {
-	mutexLock(&this->decodeStatusLock);
-	condvarWaitTimeout(&this->decodeStatusCV,100000);
-	bool tmp = this->decodeRunning;
-	this->Metadata.currtime = floor(this->tell_time());
-	mutexUnlock(&this->decodeStatusLock);
-	return tmp;
-}
-
-void mp3decoder_trampoline(void *parameter) {
-	mp3decoder* obj = (mp3decoder*)parameter;
-	obj->main_thread(NULL);
-}
-
-void mp3decoder::main_thread(void *) {
-	mutexLock(&this->decodeStatusLock);
-	this->decodeRunning=true;
-	bool running=this->decodeRunning;
-	
-	while (running) {
-		condvarWakeAll(&this->decodeStatusCV);
-		mutexUnlock(&this->decodeStatusLock);
-
-		mutexLock(&this->decodeLock);
-		u64 retframes = drmp3_read_f32(&this->mp3, this->numFrames, this->floatBuffer);
-		this->metadata.bit_rate = mp3.frameInfo.bitrate_kbps;
-		this->metadata.length = calculate_length(this->metadata.bit_rate, this->fileSize);
-		this->metadata.in_rate = mp3.frameInfo.hz;
-		this->metadata.in_channels = mp3.frameInfo.channels;
-		this->convert_buffer();
-		u32 retval = (retframes * BYTESPERSAMPLE * this->metadata.out_channels);
-		if (retframes == 0) { // a 0 should mean EOF.
-			mutexLock(&this->decodeStatusLock);
-			this->decodeRunning = false;
-			condvarWakeAll(&this->decodeStatusCV);
-			mutexUnlock(&this->decodeStatusLock);
-		} else {
-			int x = fillPlayBuffer(this->decodeBuffer, retval/2);
-			if (x == -1) { // buffer overflow. Wait before trying again.
-				while (x == -1) {
-					svcSleepThread((FRAMEMS * 1000000)/4);
-					x = fillPlayBuffer(this->decodeBuffer, retval/2);
-				}
-			}
-		}
-		mutexUnlock(&this->decodeLock);
-		
-		svcSleepThread(1000); //1000ns sleep just to reduce load on CPU. can be removed if necessary.
-		
-		mutexLock(&this->decodeStatusLock);
-		running = this->decodeRunning;
-	}
-	condvarWakeAll(&this->decodeStatusCV);
-	mutexUnlock(&this->decodeStatusLock);
-}
-
-
-void mp3decoder::convert_buffer() {
-	float_to_s16(this->floatBuffer, this->decodeBuffer, (this->floatBufferSize/sizeof(float)));
 }
