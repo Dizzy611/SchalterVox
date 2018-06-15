@@ -8,6 +8,7 @@
 #include <cmath>
 #include "audiofile.hpp"
 #include "playback.hpp"
+#include "decoder.hpp"
 
 #define DR_MP3_IMPLEMENTATION
 #include "mp3dec.hpp"
@@ -47,25 +48,39 @@ void mp3decoder::update_length() {
 	m.length = this->fileSize/avg_byterate;
 	m.length_pcm = m.length*m.samplerate;
 	
-	this->set_metadata(m);
+	this->set_metadata(m,true);
 }
 	
 	
 void mp3decoder::parse_metadata() {
 	this->update_length();
 	metadata_t m = this->metadata;
-	this->rawid3 = parse_id3_tags(fileName);
-
+	this->rawid3 = parse_id3_tags(this->fn);
+	m.filename = this->fn;
+	m.filetype = "mp3";
 	m.artist = get_id3_tag(this->rawid3, artist);
 	m.album = get_id3_tag(this->rawid3, album);
-	this->metadata.title = get_id3_tag(this->rawid3, title); 
+	m.title = get_id3_tag(this->rawid3, title); 
+	m.fancyftype = "MPEG-2 Layer III";
 	// WARN: dunno if these frameinfo bits are accurate before a single frame has been read. Guess we'll find out!
-	this->metadata.bitrate = mp3.frameInfo.bitrate_kbps;
-	this->metadata.length = calculate_length(this->metadata.bitrate, this->fileSize);
-	this->metadata.in_rate = mp3.frameInfo.hz;
-	this->metadata.in_channels = mp3.frameInfo.channels;
+	m.bitrate = mp3.frameInfo.bitrate_kbps;
+	m.length = calculate_length(this->metadata.bitrate, this->fileSize);
+	m.length_pcm = m.length*48000;
+	m.currtime = 0;
+	m.currpcm = 0;
+	m.channels = mp3.frameInfo.channels;
+	m.samplerate = mp3.frameInfo.hz;
+	m.bitdepth = 16;
+	this->set_metadata(m, true);
+}
 
-	}
+void mp3decoder::update_metadata() {
+	this->update_length();
+	metadata_t m = this->metadata;
+	m.currtime = 0; // haven't figured out how I'm going to do this yet for mp3
+	m.currpcm = 0;
+	this->set_metadata(m, false);
+}
 
 mp3decoder::mp3decoder(const string& fileName) {
 	mutexLock(&this->decodeLock);
@@ -75,7 +90,7 @@ mp3decoder::mp3decoder(const string& fileName) {
 	mp3config.outputChannels = 2;
 	mp3config.outputSampleRate = SAMPLERATE;
 	this->fileSize = 0;
-
+	this->fn = fileName;
 	// determine filesize for checking length. this will only work on CBR files, but dr_mp3 doesn't have a better way.
 	FILE *tmp=fopen(fileName.c_str(), "r");
 	if (tmp!=NULL) {
@@ -89,23 +104,15 @@ mp3decoder::mp3decoder(const string& fileName) {
 		this->decodeRunning = false;
 		return;
 	}
-	
+	this->parse_metadata();
 	this->brA = 0; // bitrate accumulator and denominator
 	this->brD = 0; // used for getting a more accurate length 
                    // the further we are in a file (in a VBR/ABR situation)
-	this->metadata.out_channels = mp3config.outputChannels;
-	this->metadata.out_rate = mp3config.outputSampleRate;
-	this->metadata.bit_rate = 0;
-	this->metadata.in_rate = 0;
-	this->metadata.in_channels = 0;
-	this->metadata.current_time = 0;
-	this->metadata.length = 0; // can't get this until we get bitrate, which we get with the first frame.
-	this->metadata.bit_depth = 16;
-	this->numFrames = (this->metadata.out_rate/FRAMERATE);
+	this->numFrames = (SAMPLERATE/FRAMERATE);
 
-	this->decodeBufferSize = (this->numFrames * BYTESPERSAMPLE * this->metadata.out_channels);
+	this->decodeBufferSize = (this->numFrames * BYTESPERSAMPLE * 2);
 	this->decodeBuffer = (s16 *) malloc(this->decodeBufferSize);
-	this->floatBufferSize = (this->numFrames * this->metadata.out_channels * sizeof(float));
+	this->floatBufferSize = (this->numFrames * 2 * sizeof(float));
 	this->floatBuffer = (float *) malloc(this->floatBufferSize);
 
 	this->decodeRunning = false;
@@ -147,11 +154,10 @@ int mp3decoder::seek_time(double time) {
 	return 1;
 }
 
-bool mp3decoder::checkRunning() {
+bool mp3decoder::check_running() {
 	mutexLock(&this->decodeStatusLock);
 	condvarWaitTimeout(&this->decodeStatusCV,100000);
 	bool tmp = this->decodeRunning;
-	this->Metadata.currtime = floor(this->tell_time());
 	mutexUnlock(&this->decodeStatusLock);
 	return tmp;
 }
@@ -173,7 +179,7 @@ void mp3decoder::main_thread(void *) {
 		mutexLock(&this->decodeLock);
 		u64 retframes = drmp3_read_f32(&this->mp3, this->numFrames, this->floatBuffer);
 		this->convert_buffer();
-		u32 retval = (retframes * BYTESPERSAMPLE * this->metadata.out_channels);
+		u32 retval = (retframes * BYTESPERSAMPLE * 2);
 		if (retframes == 0) { // a 0 should mean EOF.
 			mutexLock(&this->decodeStatusLock);
 			this->decodeRunning = false;

@@ -55,15 +55,11 @@ class mp3decoder : public decoder {
 		~mp3decoder();
 		void start();
 		void stop();
-		long tell();
-		long tell_time();
- 		long length();
-		long length_time();
 		int seek(long position);
 		int seek_time(double time);
-		int get_bitrate();
-		mp3metadata get_metadata();
-		bool checkRunning();
+		void parse_metadata();
+		void update_metadata();
+		bool check_running();
 		void main_thread(void *); // This should really be private, but it needs to be public due to the thread trampoline.
 	private:
 		drmp3 mp3;
@@ -71,8 +67,12 @@ class mp3decoder : public decoder {
 		float floatBufferSize;
 		int numFrames;
 		void convert_buffer();
-		mp3metadata metadata;
+		metadata_t metadata;
+		string fn;
 		id3 rawid3;
 		int fileSize; // necessary for determining length.
+		void update_length();
+		int brA;
+		int brD;
 };
 #endif
