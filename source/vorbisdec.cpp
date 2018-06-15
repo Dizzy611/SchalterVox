@@ -7,7 +7,6 @@
 #include <cstring>
 #include <malloc.h>
 #include <cmath>
-#include "audiofile.hpp"
 #include "playback.hpp"
 #include "vorbisdec.hpp"
 
@@ -39,9 +38,10 @@ vorbis_tags vorbis_comment_split(const string &s) {
 	retval.body = body_construct;
 	return retval;
 }
-	
+
 vorbisdecoder::vorbisdecoder(const string& fileName) {
 	mutexLock(&this->decodeLock);
+	this->fn = fileName;
 	int lvRet = ov_fopen(fileName.c_str(), &this->vorbisFile);
 	if (lvRet < 0) {
 		this->decoderValid = false;
@@ -49,12 +49,8 @@ vorbisdecoder::vorbisdecoder(const string& fileName) {
 		return;
 	}
 	this->info = ov_info(&this->vorbisFile, -1);
-	//if (this->info->rate != SAMPLERATE) {
-	//	this->decoderValid = false;
-	//	this->decoderError = "Error, file is " + to_string(this->info->rate) + "Hz, can only play at SAMPLERATEHz currently.";
-	//	return;
-	//}
 	this->comment = ov_comment(&this->vorbisFile,-1);
+	this->parse_metadata();
 	this->decodeBufferSize = ((this->info->rate/FRAMERATE) * BYTESPERSAMPLE * this->info->channels);
 	this->decodeBuffer = (s16 *) malloc(this->decodeBufferSize);
 	this->decodeRunning = false;
@@ -84,20 +80,38 @@ void vorbisdecoder::stop() {
 	threadWaitForExit(&this->decodingThread);
 }
 
-long vorbisdecoder::tell() {
-	return ov_pcm_tell(&this->vorbisFile);
+void vorbisdecoder::parse_metadata() {
+	metadata_t m = this->metadata;
+	m.filename=this->fn;
+	m.filetype="ogg";
+	m.fancyftype="Ogg Vorbis";
+	m.bitdepth = 16;
+	m.channels = this->info->channels;
+	m.samplerate = this->info->rate;
+	set_samplerate(m.samplerate);
+	m.bitrate = this->info->bitrate_nominal/1024;
+	for (int i=0; i<(this->comment->comments); i++) {
+		vorbis_tags vt = vorbis_comment_split(this->comment->user_comments[i]);
+		if (vt.header == "ARTIST") {
+			m.artist = vt.body;
+		} else if (vt.header == "ALBUM") {
+			m.album = vt.body;
+		} else if (vt.header == "TITLE") {
+			m.title = vt.body;
+		} else {
+			m.other.push_back(this->comment->user_comments[i]);
+		}
+	}
+	m.length = ov_time_total(&this->vorbisFile, -1);
+	m.length_pcm = ov_pcm_total(&this->vorbisFile,-1);
+	this->set_metadata(m, true);
 }
 
-long vorbisdecoder::tell_time() {
-	return ov_time_tell(&this->vorbisFile);
-}
-
-long vorbisdecoder::length() {
-	return ov_pcm_total(&this->vorbisFile, -1);
-}
-
-long vorbisdecoder::length_time() {
-	return ov_time_total(&this->vorbisFile, -1);
+void vorbisdecoder::update_metadata() {
+	metadata_t m = this->metadata;
+	m.currtime = ov_time_tell(&this->vorbisFile);
+	m.currpcm = ov_pcm_tell(&this->vorbisFile);
+	this->set_metadata(m, false);
 }
 
 int vorbisdecoder::seek(long position) {
@@ -108,15 +122,11 @@ int vorbisdecoder::seek_time(double time) {
 	return ov_time_seek_lap(&this->vorbisFile, time);
 }
 
-int vorbisdecoder::get_bitrate() {
-	return ov_bitrate(&this->vorbisFile, -1);
-}
 
-bool vorbisdecoder::checkRunning() {
+bool vorbisdecoder::check_running() {
 	mutexLock(&this->decodeStatusLock);
 	condvarWaitTimeout(&this->decodeStatusCV,100000);
 	bool tmp = this->decodeRunning;
-	this->Metadata.currtime = floor(this->tell_time());
 	mutexUnlock(&this->decodeStatusLock);
 	return tmp;
 }
@@ -162,6 +172,7 @@ void vorbisdecoder::main_thread(void *) {
 		
 		svcSleepThread(1000);
 		
+		this->update_metadata();
 		mutexLock(&this->decodeStatusLock);
 		running = this->decodeRunning;
 	}

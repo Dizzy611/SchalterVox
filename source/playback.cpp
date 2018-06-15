@@ -36,7 +36,18 @@ void set_samplerate(int sr) {
 }
 
 void stop_playback(bool playout) {
-	if (playout) {
+	// TODO: Fix playout for resampled audio. Currently causes freeze.
+	//       Suspected causes include buffer overflow (shouldn't be 
+	//       possible given the size of atb) or strange/undefined behavior 
+	//       at low atbUsed values (due to mismatch between buffer size, 
+	//		 which is based on device samplerate, and amount of buffer 
+	//       consumed, in a pass, based on input samplerate.
+	//		 Unsure how to fix atm, and it's better to just stub out 
+	//       the functionality (given the small buffer sizes playout 
+	//       isn't noticeable anyway) than have people testing the
+	//       release end up corrupting their filesystems from a hard freeze
+	//       with open handles, as has happened to be repeatedly now.
+	if (playout && (current_samplerate==AUDIO_SAMPLERATE)) {
 		bool flsh = false;
 		while (!flsh) { // Wait for the buffer to empty before terminating.
 			mutexLock(&aStatusLock);
@@ -107,7 +118,7 @@ void playback_thread_main(void *) {
 		audoutWaitPlayFinish(&released, &cnt, U64_MAX);
 
 		mutexLock(&aLock);		
-		if (atbUsed != 0) {
+		if (atbUsed > 0) {
 			mutexLock(&aStatusLock);
 			flushing = false;
 			condvarWakeAll(&aStatusCV);
@@ -130,9 +141,10 @@ void playback_thread_main(void *) {
 				atbUsed -= size / sizeof(u32);
 				memmove(atb, atb + (size / sizeof(u32)), atbUsed * sizeof(u32));
 			} else {
-				resampleBuffer((short*)released->buffer, AUDIO_BUFFER_SAMPLES);
+				resampleBuffer((short*)released->buffer, (size / sizeof(u32)));
 				int outsize = (size * current_samplerate) / (sizeof(u32) * AUDIO_SAMPLERATE); 
 				atbUsed -= outsize;
+				if (atbUsed<0) atbUsed=0;
 				memmove(atb, atb + outsize, atbUsed * sizeof(u32));
 			}
 			audoutAppendAudioOutBuffer(released);

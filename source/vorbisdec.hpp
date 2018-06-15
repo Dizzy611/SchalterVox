@@ -2,6 +2,7 @@
 #include <vorbis/vorbisfile.h>
 #include <string>
 #include <sstream>
+#include "decoder.hpp"
 
 void vorbisdecoder_trampoline(void *parameter);
 
@@ -20,17 +21,16 @@ class vorbisdecoder : public decoder {
 		void stop();
 		long tell();
 		long tell_time();
- 		long length();
-		long length_time();
 		int seek(long position);
 		int seek_time(double time);
-		int get_bitrate();
-		bool checkRunning();
+		bool check_running();
 		vorbis_info* info;
 		vorbis_comment* comment;
 		void main_thread(void *); // This should really be private, but it needs to be public due to the thread trampoline.
+		void parse_metadata();
+		void update_metadata();
 	private:
 		OggVorbis_File vorbisFile;
 		int section;
-		
+		string fn;
 };
