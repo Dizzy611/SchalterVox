@@ -9,7 +9,7 @@ init:
   - docker pull devkitpro/devkita64
 install:
   - ps: |
-      $version = Get-Date -Format "yyyyddMM-HHmmss"
+      $version = Get-Date -Format "yyyyMMdd-HHmmss"
       Update-AppveyorBuild -Version "$version"
   - ls -al
   - docker run --mount type=bind,source="$(pwd)",target=/home/SchalterVox -w/home/SchalterVox devkitpro/devkita64 make

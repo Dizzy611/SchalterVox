@@ -2,12 +2,8 @@
 #define AUDIOFILE_H
 #include <string>
 #include <switch.h>
-#include <samplerate.h>
 
 #include "metadata.hpp"
-#include "util.hpp"
-#include "playback.hpp"
-
 #include "decoder.hpp"
 
 using namespace std;

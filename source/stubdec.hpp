@@ -1,5 +1,10 @@
+// This file and the accompanying source are stubs intended
+// to show how to program a decoder to work with SchalterVox.
+#ifndef STUB_H
+#define STUB_H
 #include <string>
 #include <sstream>
+#include "decoder.hpp" 
 
 // aside from adding variables as needed, this header should remain relatively the same
 
@@ -11,15 +16,13 @@ class stubdecoder : public decoder {
 		~stubdecoder();
 		void start();
 		void stop();
-		long tell();
-		long tell_time();
- 		long length();
-		long length_time();
 		int seek(long position);
 		int seek_time(double time);
-		int get_bitrate();
-		bool checkRunning();
+		bool check_running();
 		void main_thread(void *); // This should really be private, but it needs to be public due to the thread trampoline.
+		void parse_metadata();
+		void update_metadata();
 	private:
 		// stick your file handle in here, and any other state variables for the decoder.
 };
+#endif
