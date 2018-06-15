@@ -72,13 +72,13 @@ int audioLoop(const string& musicfile) {
 	consoleClear();
 	string outstr = "";
 		
-	outstr += "SchalterVox Alpha\nNow Playing: "; //row0 end
+	outstr += "SchalterVox Alpha\n"; //row0 end
 	
 	string tmp;
 	if (af->metadata.artist != "Unknown") {
-		tmp = af->metadata.artist + " - " + af->metadata.title;
+		tmp = "Now Playing: " + af->metadata.artist + " - " + af->metadata.title;
 	} else { 
-		tmp = af->metadata.title;
+		tmp = "Now Playing: " + af->metadata.title;
 	}
 	if (tmp.length()>80) {
 		tmp.resize(76);
