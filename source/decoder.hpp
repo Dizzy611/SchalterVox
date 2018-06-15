@@ -3,6 +3,15 @@
 #include <switch.h>
 #include <string>
 #include "metadata.hpp"
+
+#define SAMPLERATE 48000
+#define CHANNELCOUNT 2
+#define FRAMEMS 1
+#define FRAMERATE (1000 / FRAMEMS)
+#define SAMPLECOUNT (SAMPLERATE / FRAMERATE)
+#define BYTESPERSAMPLE 2
+#define BUFFERSIZE (SAMPLECOUNT * CHANNELCOUNT * BYTESPERSAMPLE)
+
 using namespace std;
 
 class decoder {

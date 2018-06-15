@@ -3,8 +3,6 @@
 #include <switch.h>
 #include <malloc.h>
 #include "playback.hpp"
-#include <cstdio>
-#include <cmath>
 
 static int atbUsed = 0;
 static u32 *atb;
