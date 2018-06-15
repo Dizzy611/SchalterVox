@@ -1,14 +1,13 @@
 // This file and the accompanying header are stubs intended
 // to show how to program a decoder to work with SchalterVox.
 #include <switch.h>
-#include <stdio.h>
-#include <errno.h>
 #include <string>
 #include <cstring>
 #include <malloc.h>
 #include <cmath>
 #include "audiofile.hpp"
 #include "playback.hpp"
+#include "stubdec.hpp"
 
 #define SAMPLERATE 48000
 #define CHANNELCOUNT 2
@@ -26,7 +25,9 @@ stubdecoder::stubdecoder(const string& fileName) {
 	// the file should be opened and metadata structures populated here
 	this->parse_metadata();
 	
-	this->decodeBufferSize = (rate/FRAMERATE) * BYTESPERSAMPLE * channels);
+	// substitute the samplerate of your file, the bytes per sample
+	// and the channels for 48000, 2, and 2 here.
+	this->decodeBufferSize = ((48000/FRAMERATE) * 2 * 2);
 	this->decodeBuffer = (s16 *) malloc(this->decodeBufferSize);
 	this->decodeRunning = false;
 	this->decoderValid = true; // set this to false if any step fails to validate
@@ -69,7 +70,6 @@ bool stubdecoder::check_running() { // this function should stay pretty much as 
 	mutexLock(&this->decodeStatusLock);
 	condvarWaitTimeout(&this->decodeStatusCV,100000);
 	bool tmp = this->decodeRunning;
-	this->Metadata.currtime = floor(this->tell_time());
 	mutexUnlock(&this->decodeStatusLock);
 	return tmp;
 }
@@ -132,7 +132,7 @@ void stubdecoder::parse_metadata() {
 }
 
 void stubdecoder::update_metadata() {
-	metadata_t m = this->metadata();
+	metadata_t m = this->metadata;
 	// Update parts of the metadata_t struct that have changed.
 	this->set_metadata(m, false);
 }
