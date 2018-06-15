@@ -57,21 +57,15 @@ void stop_playback(bool playout) {
 		}
 		u64 sleepnano = 4000000000/AUDIO_BUFFER_DIVIDER; // Sleep for 4x the system buffer size, to drain all buffers.
 		svcSleepThread(sleepnano);
-		printf("DEBUG: Slept.\n");
 	}
 	
-	printf("DEBUG: Waiting to signal audio to quit...\n");
 	mutexLock(&aStatusLock);
 	condvarWait(&aStatusCV);
-	printf("DEBUG: Signalling audio to quit...\n");
 	playing = false;
 	mutexUnlock(&aStatusLock);
-	printf("DEBUG: Waiting for thread to exit...\n");
 	threadWaitForExit(&playback_thread);
-	printf("DEBUG: Thread exited, waiting for audio to stop...\n");
 	audoutStopAudioOut();
 	audoutExit();
-	printf("DEBUG: Audio stopped. leaving stop_playback()\n");
 }
 
 void abort_playback() { // Used for errors.
