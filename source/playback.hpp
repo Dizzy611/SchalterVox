@@ -1,5 +1,6 @@
 #ifndef PLAYBACK_H
 #define PLAYBACK_H
+#include <string>
 
 void start_playback();
 void abort_playback();

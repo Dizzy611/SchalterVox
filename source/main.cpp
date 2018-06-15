@@ -1,11 +1,7 @@
-#include <iostream>
-#include <string>
-#include <cstring>
-#include <switch.h>
-#include <errno.h>
 #include "util.hpp"
 #include "audiofile.hpp"
 #include "input.hpp"
+#include "playback.hpp"
 
 using namespace std;
 

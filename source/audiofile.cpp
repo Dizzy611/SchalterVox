@@ -1,17 +1,10 @@
-#include <switch.h>
-#include <sstream>
-#include <string>
-
+// passed to decoder.hpp to make it pull in all the decoders.
 #define IN_AUDIOFILE
 #include "decoder.hpp"
 #include "audiofile.hpp"
+#include "metadata.hpp"
 #include "util.hpp"
 #include "playback.hpp"
-#include "metadata.hpp"
-
-// passed to decoder.hpp to make it pull in all the decoders.
-
-#include "audiofile.hpp"
 
 audioFile::audioFile(const string& filename) {
 	this->metadata.filename = filename;

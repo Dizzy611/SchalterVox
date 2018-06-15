@@ -1,12 +1,5 @@
 #include <vorbis/codec.h>
 #include <vorbis/vorbisfile.h>
-#include <switch.h>
-#include <stdio.h>
-#include <errno.h>
-#include <string>
-#include <cstring>
-#include <malloc.h>
-#include <cmath>
 #include "playback.hpp"
 #include "vorbisdec.hpp"
 

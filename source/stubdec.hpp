@@ -4,6 +4,7 @@
 #define STUB_H
 #include <string>
 #include <sstream>
+#include "decoder.hpp" 
 
 // aside from adding variables as needed, this header should remain relatively the same
 

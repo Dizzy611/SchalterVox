@@ -1,9 +1,6 @@
 #ifndef INPUT_H
 #define INPUT_H
 #include <switch.h>
-#include <queue>
-
-using namespace std;
 
 #define SIG_STOPQUIT 1
 #define SIG_PLAY 2
