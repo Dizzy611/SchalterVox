@@ -11,6 +11,33 @@ using namespace std;
 
 const vector<string> valid_filetypes {"ogg"};
 
+string name_channels(int c) {
+	switch (c) {
+		case 1:
+			return "Mono";
+			break;
+		case 2:
+			return "Stereo";
+			break;
+		default:
+			return c + " Channel";
+	}
+}
+
+string convert_time(int time) {
+	int hour = time/3600;
+	int second = time%3600;
+	int minute = second/60;
+	second %= 60;
+	char retval[16];
+	if (hour > 0) {
+		sprintf(retval,"%.2d:%.2d:%.2d",hour,minute,second);
+	} else {
+		sprintf(retval,"%.2d:%.2d",minute,second);
+	}
+	return string(retval);
+}
+
 void waitExit() {
 	while(appletMainLoop()) {
 		hidScanInput();
@@ -26,58 +53,81 @@ void waitExit() {
 	gfxExit();
 }
 
-bool audioLoop(const string& musicfile) {
-
+int audioLoop(const string& musicfile) {
+	printf("SchalterVox is loading...\n");
 	bool selfquit = false;
 	bool active = true;
-	bool next = false;
+	bool next = 0;
+	
 	input_handler *ih = new input_handler();
 	ih->start();
 	
 	start_playback();
 
 	audioFile *af = new audioFile(musicfile);
-	af->loadFile();
+	af->load_file();
+	af->update_metadata(true);
 	af->Decoder->start();
 	
-	if ((af->Metadata.artist != "Unknown") && (af->Metadata.title != "Unknown")) {
-		printf("Now Playing: %s - %s\n", af->Metadata.artist.c_str(), af->Metadata.title.c_str());
-	}
-	if (af->Metadata.album != "Unknown") {
-		printf("Album: %s\n", af->Metadata.album.c_str());
-	}
-	
-	// Dunno why the bitrate is off by a factor of 5 for Vorbis. It seems to be from testing though.
-	printf("%ikbit %iHz %i-bit %i channel %s\n", af->Metadata.bitrate*5/1024, af->Metadata.samplerate, af->Metadata.bitdepth, af->Metadata.channels, af->Metadata.fancyftype.c_str());
-	printf("Press + to stop, R/ZR/SR/DPAD Right to skip forward a track.\n");
+
 	while (active) {
-		printf("%i/%i seconds\r", af->Decoder->Metadata.currtime, af->Metadata.length);
+		consoleClear();
+		af->update_metadata(false);
+		string outstr = "";
+		
+		outstr += "SchalterVox Alpha\nNow Playing: ";
+
+		if (af->metadata.artist != "Unknown") {
+			outstr += af->metadata.artist + " - " + af->metadata.title;
+		} else {
+			outstr += af->metadata.title;
+		}
+		outstr += "\n";
+		if (af->metadata.album != "Unknown") {
+			outstr += "Album: ";
+			outstr += af->metadata.album;
+			outstr += "\n";
+		}
+		outstr += to_string(af->metadata.bitrate) + "kbps ";
+		outstr += to_string(af->metadata.samplerate) + "Hz ";
+		outstr += to_string(af->metadata.bitdepth) + "bit ";
+		outstr += name_channels(af->metadata.channels);
+		outstr += " " + af->metadata.fancyftype + "\nTime: ";
+		outstr += convert_time(af->metadata.currtime);
+		outstr += "/";
+		outstr += convert_time(af->metadata.length);
+		outstr += "\nPress + to stop, R/ZR/SR/DPAD Right to skip forward a track.\n";
+		printf(outstr.c_str());
+		
 		u32 signals = ih->get_signals();
 		if (signals & SIG_STOPQUIT) {
 			active=false;
 			selfquit=false;
-			next=false;
+			next=0;
+			printf("\nStopping...\n");
 		}
-		if (!af->Decoder->checkRunning()) {
+		if (!af->Decoder->check_running()) {
 			active=false;	
 			selfquit=true;
-			next=true;
+			next=1;
+			printf("\nNext track...\n");
 		}
 		if (!appletMainLoop()) {
 			active=false;
 			selfquit=false;
-			next=false;
+			next=-1;
+			printf("\nQuitting...\n");
 		}
 		if (signals & SIG_NEXT) {
 			active=false;
 			selfquit=false;
-			next=true;
+			next=1;
+			printf("\nSkipping...\n");
 		}
 		gfxFlushBuffers();
 		gfxSwapBuffers();
 		gfxWaitForVsync();
 	}
-	printf("\nStopped.\n");
 	if (!selfquit) {
 		af->Decoder->stop();
 	}
@@ -92,8 +142,8 @@ bool audioLoop(const string& musicfile) {
 int main() {	
 	gfxInitDefault();
 	consoleInit(NULL);
-	printf("SchalterVox Pre-Alpha Loaded!\n");
-	printf("Looking for oggs...\n");
+	printf("SchalterVox Alpha Loaded!\n");
+	printf("Looking for media...\n");
 	vector<string> files;
 	for (auto & i : valid_filetypes) {
 		if (findFilesByExt("./media", i, files) == 0) {
@@ -109,15 +159,12 @@ int main() {
 	} else {
 		for (auto & i : files) {
 			printf("Loading a media file and attempting to play...\n");
-			if (!audioLoop(i)) break;
+			int x = audioLoop(i);
+			if (x == -1) return 0;
+			if (x == 0) break;
 		}
 		printf("Exited Audio mode. Press + to quit.\n");
 	}
 	waitExit();
 	return 0;
 }
-
-
-
-
-	
