@@ -5,7 +5,8 @@
 
 using namespace std;
 
-const vector<string> valid_filetypes {"ogg"};
+vector<string> valid_filetypes {"ogg"};
+
 
 string name_channels(int c) {
 	switch (c) {
@@ -16,20 +17,24 @@ string name_channels(int c) {
 			return "Stereo";
 			break;
 		default:
-			return c + " Channel";
+			return to_string(c) + " Channel";
 	}
 }
 
 string convert_time(int time) {
-	int hour = time/3600;
-	int second = time%3600;
-	int minute = second/60;
-	second %= 60;
 	char retval[16];
-	if (hour > 0) {
-		sprintf(retval,"%.2d:%.2d:%.2d",hour,minute,second);
+	if (time == -1) {
+		sprintf(retval,"??:??");
 	} else {
-		sprintf(retval,"%.2d:%.2d",minute,second);
+		int hour = time/3600;
+		int second = time%3600;
+		int minute = second/60;
+		second %= 60;
+		if (hour > 0) {
+			sprintf(retval,"%.2d:%.2d:%.2d",hour,minute,second);
+		} else {
+			sprintf(retval,"%.2d:%.2d",minute,second);
+		}
 	}
 	return string(retval);
 }
@@ -64,47 +69,32 @@ int audioLoop(const string& musicfile) {
 	af->load_file();
 	af->update_metadata(true);
 	af->Decoder->start();
-	
+	#ifndef DEBUG_DISABLE_ALOOP_PRINT
 	consoleClear();
-	string outstr = "";
-		
-	outstr += "SchalterVox Alpha\n"; //row0 end
+	#endif
 	
-	string tmp;
-	if (af->metadata.artist != "Unknown") {
-		tmp = "Now Playing: " + af->metadata.artist + " - " + af->metadata.title;
-	} else { 
-		tmp = "Now Playing: " + af->metadata.title;
-	}
-	if (tmp.length()>80) {
-		tmp.resize(76);
-		tmp = tmp + "...";
-	}
-	outstr += tmp + "\n"; //row1 end
-	if (af->metadata.album != "Unknown") {
-		outstr += "Album: ";
-		outstr += af->metadata.album;		
-	}
-	outstr += "\n"; //row2 end
-
-	outstr += to_string(af->metadata.bitrate) + "kbps ";
-	outstr += to_string(af->metadata.samplerate) + "Hz ";
-	outstr += to_string(af->metadata.bitdepth) + "bit ";
-	outstr += name_channels(af->metadata.channels); 
-	outstr += " " + af->metadata.fancyftype + "\n"; //row3 end
-	printf(outstr.c_str());
-
+	#ifdef DEBUG_DISABLE_ALOOP_PRINT
+	printf("SchalterVox Alpha. Debug Mode (metadata disabled).\n");
+	#else
+	printf("\x1b[1;0HSchalterVox Alpha");
+	#endif
+	
+	#ifndef DEBUG_DISABLE_ALOOP_PRINT
+	printf("\x1b[2;0HNow Playing: %s - %s",af->metadata.artist.c_str(),
+	        af->metadata.title.c_str());
+	printf("\x1b[3;0HAlbum: %s",af->metadata.album.c_str());
+	printf("\x1b[4;0H%ikbps %iHz %ibit %s %s",af->metadata.bitrate, 
+	        af->metadata.samplerate, af->metadata.bitdepth, 
+			name_channels(af->metadata.channels).c_str(), 
+			af->metadata.fancyftype.c_str());
+	#endif
+	
 	while (active) {
 		af->update_metadata(false);
-		outstr = "";
-		printf("\x1b[5;0H"); // move to the 5th row, first column		
-		outstr += "Time: ";
-		outstr += convert_time(af->metadata.currtime);
-		outstr += "/";
-		outstr += convert_time(af->metadata.length);
-		outstr += "\nPress + to stop, R/ZR/SR/DPAD Right to skip forward a track.\n";
-		printf(outstr.c_str());
-		
+		#ifndef DEBUG_DISABLE_ALOOP_PRINT
+		printf("\x1b[5;0HTime: %s/%s", convert_time(af->metadata.currtime).c_str(), convert_time(af->metadata.length).c_str());
+		printf("\x1b[6;0HPress + to stop, R/ZR/SR/DPAD Right to skip forward a track.\n");
+		#endif
 		u32 signals = ih->get_signals();
 		if (signals & SIG_STOPQUIT) {
 			active=false;
@@ -151,20 +141,19 @@ int main() {
 	printf("SchalterVox Alpha Loaded!\n");
 	printf("Looking for media...\n");
 	vector<string> files;
-	for (auto & i : valid_filetypes) {
-		if (findFilesByExt("./media", i, files) == 0) {
-			for (auto & i : files) {
-				printf("FILE FOUND: %s\n",i.c_str());
-			}
-		} else {
-			printf("While reading directory: Error number %i\n", errno);
+	if (findFilesByExt("./media", valid_filetypes, files) == 0) {
+		for (auto & i : files) {
+			printf("FILE FOUND: %s\n",i.c_str());
 		}
+	} else {
+		printf("While reading directory: Error number %i\n", errno);
 	}
+	
 	if (files.empty()) {
 		printf("No acceptable media files found. Please place files in the media/ directory.\nPress + to quit.\n");
 	} else {
 		for (auto & i : files) {
-			printf("Loading a media file and attempting to play...\n");
+			printf("Loading a media file (%s) and attempting to play...\n", i.c_str());
 			int x = audioLoop(i);
 			if (x == -1) return 0;
 			if (x == 0) break;

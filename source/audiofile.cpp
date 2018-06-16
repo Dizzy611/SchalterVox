@@ -27,7 +27,7 @@ audioFile::~audioFile() {
 
 void audioFile::load_file() {
 	string filetype = this->metadata.filetype;
-
+	this->Decoder=NULL;
 	if (filetype == "ogg") {
 		this->Decoder = new vorbisdecoder(this->metadata.filename);
 	} else if (filetype == "mp3") {
@@ -38,11 +38,15 @@ void audioFile::load_file() {
 		// this->Decoder = new wavdecoder(this->metadata.filename);
 	} else if ((filetype == "mod") || (filetype == "it") || (filetype == "s3m") || (filetype == "xm")) {
 		// this->Decoder = new moddecoder(this->metadata.filename);
-	}
+	} 
 	
 	
-	if (!this->Decoder->decoderValid) {
-		printf("ERROR CREATING DECODER: %s", this->Decoder->decoderError.c_str());
+	if (this->Decoder==NULL || !this->Decoder->decoderValid) {
+		if (this->Decoder!=NULL) {
+			printf("ERROR CREATING DECODER: %s", this->Decoder->decoderError.c_str());
+		} else {
+			printf("ERROR CREATING DECODER: Unrecognized or unsupported filetype.\n");
+		}
 		abort_playback();
 		return;
 	}
