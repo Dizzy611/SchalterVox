@@ -2,10 +2,12 @@
 #include <dirent.h>
 #include <errno.h>
 #include <vector>
+#include <algorithm>
 #include "util.hpp"
 
 using std::string;
 using std::vector;
+
 
 // Functions 
 
@@ -18,14 +20,14 @@ string getFileExt(const string& fname) {
 	}
 }
 
-int findFilesByExt(const string& path, const string& ext, vector<string> &out) {
+int findFilesByExt(const string& path, vector<string> &exts, vector<string> &out) {
 	struct dirent *dp;
 	DIR *dfd = opendir(path.c_str());
 	if(dfd != NULL) {
 		while ((dp = readdir(dfd)) != NULL) {
 			string fname = path + "/" + dp->d_name;
 			string myext = getFileExt(fname);
-						if (myext == ext) {
+			if (find(exts.begin(), exts.end(), myext) != exts.end()) {
 				out.push_back(fname);
 			}
 		}
