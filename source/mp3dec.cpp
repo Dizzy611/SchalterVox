@@ -35,50 +35,44 @@ void float_to_s16(float* in, s16* out, int length) {
 	}
 }
 
-void mp3decoder::update_length() {
-	metadata_t m = this->metadata;
-	m.bitrate = mp3.frameInfo.bitrate_kbps;
-	this->brA += this->metadata.bitrate;
+long mp3decoder::update_length() {
+	this->brA += this->mp3.frameInfo.bitrate_kbps;
 	this->brD++;
-	
 	// this may be off due to frame headers being 32 bits every frame
 	// but counting frames is difficult and I'm not certain the MP3 bitrate
 	// isn't already taking overhead into account.
-	int avg_byterate = (this->brA/this->brD)*1024/8;
-	m.length = this->fileSize/avg_byterate;
-	m.length_pcm = m.length*m.samplerate;
-	
-	this->set_metadata(m,true);
+	int avg_bitrate = (this->brA/this->brD);
+	return(calculate_length(avg_bitrate, this->fileSize));
 }
 	
 	
 void mp3decoder::parse_metadata() {
-	this->update_length();
 	metadata_t m = this->metadata;
 	this->rawid3 = parse_id3_tags(this->fn);
 	m.filename = this->fn;
 	m.filetype = "mp3";
 	m.artist = get_id3_tag(this->rawid3, artist);
 	m.album = get_id3_tag(this->rawid3, album);
-	m.title = get_id3_tag(this->rawid3, title); 
+	m.title = get_id3_tag(this->rawid3, title);
 	m.fancyftype = "MPEG-2 Layer III";
-	// WARN: dunno if these frameinfo bits are accurate before a single frame has been read. Guess we'll find out!
-	m.bitrate = mp3.frameInfo.bitrate_kbps;
-	m.length = calculate_length(this->metadata.bitrate, this->fileSize);
-	m.length_pcm = m.length*48000;
+	m.length = -1;              // can't find these before the file has started 
+	m.length_pcm = -1;          // (because we need a bitrate value)
 	m.currtime = 0;
 	m.currpcm = 0;
-	m.channels = mp3.frameInfo.channels;
-	m.samplerate = mp3.frameInfo.hz;
 	m.bitdepth = 16;
+	m.channels = this->mp3.frameInfo.channels;
+	m.samplerate = this->mp3.frameInfo.hz;
 	this->set_metadata(m, true);
 }
 
 void mp3decoder::update_metadata() {
-	this->update_length();
 	metadata_t m = this->metadata;
 	m.currtime = 0; // haven't figured out how I'm going to do this yet for mp3
 	m.currpcm = 0;
+	m.bitrate = this->mp3.frameInfo.bitrate_kbps;
+	m.channels = this->mp3.frameInfo.channels;
+	m.samplerate = this->mp3.frameInfo.hz;
+	m.length = this->update_length();
 	this->set_metadata(m, false);
 }
 
@@ -104,6 +98,7 @@ mp3decoder::mp3decoder(const string& fileName) {
 		this->decodeRunning = false;
 		return;
 	}
+	set_samplerate(SAMPLERATE); // we're letting the MP3 codec do the resampling for us.
 	this->parse_metadata();
 	this->brA = 0; // bitrate accumulator and denominator
 	this->brD = 0; // used for getting a more accurate length 
@@ -197,7 +192,7 @@ void mp3decoder::main_thread(void *) {
 		mutexUnlock(&this->decodeLock);
 		
 		svcSleepThread(1000); //1000ns sleep just to reduce load on CPU. can be removed if necessary.
-		
+		this->update_metadata();
 		mutexLock(&this->decodeStatusLock);
 		running = this->decodeRunning;
 	}

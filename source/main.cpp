@@ -5,7 +5,7 @@
 
 using namespace std;
 
-vector<string> valid_filetypes {"ogg"};
+vector<string> valid_filetypes {"ogg", "mp3"};
 
 
 string name_channels(int c) {

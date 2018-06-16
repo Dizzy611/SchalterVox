@@ -67,11 +67,10 @@ class mp3decoder : public decoder {
 		float floatBufferSize;
 		int numFrames;
 		void convert_buffer();
-		metadata_t metadata;
 		string fn;
 		id3 rawid3;
 		int fileSize; // necessary for determining length.
-		void update_length();
+		long update_length();
 		int brA;
 		int brD;
 };

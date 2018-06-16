@@ -46,7 +46,7 @@ class decoder {
 // Add new decoders in here so audiofile can access them.
 #ifdef IN_AUDIOFILE
 #include "vorbisdec.hpp"
-//#include "mp3dec.hpp"
+#include "mp3dec.hpp"
 #endif
 
 #endif
