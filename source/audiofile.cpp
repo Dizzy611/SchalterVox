@@ -31,7 +31,7 @@ void audioFile::load_file() {
 	if (filetype == "ogg") {
 		this->Decoder = new vorbisdecoder(this->metadata.filename);
 	} else if (filetype == "mp3") {
-		this->Decoder = new mp3decoder(this->metadata.filename);
+		// this->Decoder = new mp3decoder(this->metadata.filename);
 	} else if (filetype == "flac") {
 		// this->Decoder = new flacdecoder(this->metadata.filename);
 	} else if (filetype == "wav") {
