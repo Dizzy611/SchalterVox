@@ -3,6 +3,8 @@
 #include <errno.h>
 #include <string>
 #include <cstring>
+#include <codecvt>
+#include <locale>
 #include <stdlib.h>
 #include <malloc.h>
 #include <cmath>
@@ -23,6 +25,25 @@
 
 using namespace std;
 
+const char* id3_contents_to_ascii(char* contents) {
+	u16string tmp = u"";
+	switch (contents[0]) {
+		case 0: // ISO-8859-1. ASCII, for our purposes. Do nothing.
+			return (contents+1);
+			break;
+		case 1: // UCS-2 (early UTF-16).
+		case 2: // UTF-16BE 
+			tmp += (char16_t *)(contents+1);
+			return std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t>{}.to_bytes(tmp).c_str();
+			// do stuff
+			break;
+		case 3: // UTF-8. Identical to ASCII for most english characters. Pass it through for now.
+		default:
+			return (contents+1);
+			break;
+	}
+}
+
 long calculate_length(int bitrate, long filesize) { // This only works properly with CBR files, but it's the closest we're going to get. Bitrate in kbps.
 	// headers are 32 bits, so we add that to bitrate to compensate
 	int byterate = (bitrate+32)*1024/8;
@@ -35,8 +56,9 @@ void float_to_s16(float* in, s16* out, int length) {
 	}
 }
 
+/* 
 long mp3decoder::update_length() {
-	this->brA += this->mp3.frameInfo.bitrate_kbps;
+	this->brA += this->mp3.bitrate_kbps;
 	this->brD++;
 	// this may be off due to frame headers being 32 bits every frame
 	// but counting frames is difficult and I'm not certain the MP3 bitrate
@@ -44,7 +66,7 @@ long mp3decoder::update_length() {
 	int avg_bitrate = (this->brA/this->brD);
 	return(calculate_length(avg_bitrate, this->fileSize));
 }
-	
+*/
 	
 void mp3decoder::parse_metadata() {
 	metadata_t m = this->metadata;
@@ -55,24 +77,25 @@ void mp3decoder::parse_metadata() {
 	m.album = get_id3_tag(this->rawid3, album);
 	m.title = get_id3_tag(this->rawid3, title);
 	m.fancyftype = "MPEG-2 Layer III";
-	m.length = -1;              // can't find these before the file has started 
-	m.length_pcm = -1;          // (because we need a bitrate value)
-	m.currtime = 0;
-	m.currpcm = 0;
+	m.currpcm = this->mp3.framesConsumed;
+	m.length_pcm = this->mp3.framesConsumed + this->mp3.framesRemaining;
+	m.length = m.length_pcm/m.samplerate;
+	m.currtime = m.currpcm/m.samplerate;
 	m.bitdepth = 16;
-	m.channels = this->mp3.frameInfo.channels;
-	m.samplerate = this->mp3.frameInfo.hz;
+	m.channels = this->mp3.channels;
+	m.samplerate = this->mp3.frameSampleRate;
 	this->set_metadata(m, true);
 }
 
 void mp3decoder::update_metadata() {
 	metadata_t m = this->metadata;
-	m.currtime = 0; // haven't figured out how I'm going to do this yet for mp3
-	m.currpcm = 0;
-	m.bitrate = this->mp3.frameInfo.bitrate_kbps;
-	m.channels = this->mp3.frameInfo.channels;
-	m.samplerate = this->mp3.frameInfo.hz;
-	m.length = this->update_length();
+	m.currpcm = this->mp3.framesConsumed;
+	m.length_pcm = this->mp3.framesConsumed + this->mp3.framesRemaining;
+	m.length = m.length_pcm/m.samplerate;
+	m.currtime = m.currpcm/m.samplerate;
+	m.bitrate = 0; // I don't have a reliable way of retrieving this. frameInfo appears to be empty in dr_mp3.
+	m.channels = this->mp3.channels;
+	m.samplerate = this->mp3.frameSampleRate;
 	this->set_metadata(m, false);
 }
 
@@ -217,7 +240,7 @@ id3 parse_id3_tags(const string& fileName) { // TODO: This code is a beast from 
 	retval.v1_year = 0;
 	retval.v1_genre = 0;
 // Commented out so we can just focus on testing decodes.	
-/* 	FILE* tmp=fopen(fileName.c_str(), "r");
+	FILE* tmp=fopen(fileName.c_str(), "r");
 	if (tmp==NULL) { 
 		return retval;
 	}
@@ -232,7 +255,7 @@ id3 parse_id3_tags(const string& fileName) { // TODO: This code is a beast from 
 		id3_ptr += 30;
 		memcpy(retval.v1_artist, id3v1+id3_ptr, 30);
 		id3_ptr += 30;
-		memcpy(retval.v1_album, id3v1+id3_ptr, 30);
+		memcpy(retval.v1_album, id3v1+id3_ptr, 30);	
 		u8 tmpyr[4];
 		memcpy(tmpyr, id3v1+id3_ptr, 4);
 		retval.v1_year = strtol((const char*)tmpyr, NULL, 4);
@@ -300,18 +323,28 @@ id3 parse_id3_tags(const string& fileName) { // TODO: This code is a beast from 
                 frameName.assign(fnPtr, 4);
                 size = ((tagBuffer[pos+7]) | (tagBuffer[pos+6] << 8) | (tagBuffer[pos+5] << 16) | (tagBuffer[pos+4] << 24));
             }
-			
 			if ((pos + size) > tagsize) {
 				break;
 			}
-			char *fcPtr = (char*)tagBuffer+pos+frameSize;
-			string frameContents(fcPtr, size);
+			string frameContents;
+			if (((tagBuffer+pos+frameSize)[0] == 1) || ((tagBuffer+pos+frameSize)[0] == 2)) {
+				// forgive this mess, but some idiot decided some ID3v2 tags need to be in fucking utf-16.
+				void *fcPtr = tagBuffer+pos+frameSize+3;
+				char16_t *wcPtr = (char16_t*)fcPtr;
+				u16string fC16;
+				fC16.assign(wcPtr, size);
+				std::wstring_convert<std::codecvt_utf8_utf16<char16_t>,char16_t> convert; 
+				frameContents.assign(convert.to_bytes(fC16));
+			} else {
+				char *fcPtr = (char*)tagBuffer+pos+frameSize+1;
+				frameContents.assign(fcPtr, size);
+			}
 			retval.v2_frames.insert(std::pair<string,string>(frameName,frameContents));
 			pos += size + frameSize;
 		}		
 		free(tagBuffer);
 	}
-	fclose(tmp); */	
+	fclose(tmp);	
 	return retval;
 }
 
@@ -324,49 +357,35 @@ string get_id3_tag(id3 tags, Basic_Tag request) { // TODO: this thing is a fucki
 			case artist:
 				it = tags.v2_frames.find("TPE1");
 				if (it != tags.v2_frames.end()) {
-					string retval = it->second;
-					retval.erase(0, 1);
-					return retval;
+					return it->second;
 				}
 				it = tags.v2_frames.find("TPE2");
 				if (it != tags.v2_frames.end()) {
-					string retval = it->second;
-					retval.erase(0, 1);
-					return retval;
+					return it->second;
 				}
 				it = tags.v2_frames.find("TPE3");
 				if (it != tags.v2_frames.end()) {
-					string retval = it->second;
-					retval.erase(0, 1);
-					return retval;
+					return it->second;
 				}
 				break;
 			case album:
 				it = tags.v2_frames.find("TALB");
 				if (it != tags.v2_frames.end()) {
-					string retval = it->second;
-					retval.erase(0, 1);
-					return retval;
+					return it->second;
 				}
 				it = tags.v2_frames.find("TOAL");
 				if (it != tags.v2_frames.end()) {
-					string retval = it->second;
-					retval.erase(0, 1);
-					return retval;
+					return it->second;
 				}
 				break;
 			case title:
 				it = tags.v2_frames.find("TIT2");
 				if (it != tags.v2_frames.end()) {
-					string retval = it->second;
-					retval.erase(0, 1);
-					return retval;
+					return it->second;
 				}
 				it = tags.v2_frames.find("TIT");
 				if (it != tags.v2_frames.end()) {
-					string retval = it->second;
-					retval.erase(0, 1);
-					return retval;
+					return it->second;
 				}
 				break;
 		}
@@ -379,15 +398,15 @@ string get_id3_tag(id3 tags, Basic_Tag request) { // TODO: this thing is a fucki
 		switch (request) {
 			case artist:
 				if (strlen(tags.v1_artist) != 0) 
-					return tags.v1_artist;
+					return string(tags.v1_artist);
 				break;
 			case album:
 				if (strlen(tags.v1_album) != 0)
-					return tags.v1_album;
+					return string(tags.v1_album);
 				break;
 			case title:
 				if (strlen(tags.v1_title) != 0)
-					return tags.v1_title;
+					return string(tags.v1_title);
 				break;
 		}
 	}

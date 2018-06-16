@@ -7,6 +7,7 @@ using namespace std;
 
 vector<string> valid_filetypes {"ogg", "mp3"};
 
+//#define DEBUG_DISABLE_ALOOP_PRINT
 
 string name_channels(int c) {
 	switch (c) {

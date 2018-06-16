@@ -45,6 +45,8 @@ struct id3 {
 
 typedef enum { artist, album, title } Basic_Tag;
 
+const char* id3_contents_to_ascii(char* contents);
+
 id3 parse_id3_tags(const string& fileName);
 
 string get_id3_tag(id3 tags, Basic_Tag request);
