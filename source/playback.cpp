@@ -113,7 +113,7 @@ void playback_thread_main(void *) { // Main playback thread
 		condvarWakeAll(&aStatusCV); // Wait until the Audio Status thread is ready to be unlocked, then unlock it
 		mutexUnlock(&aStatusLock);
 		
-		u32 cnt; // Count of played buffers
+		u32 cnt; // Count of released buffers
 		AudioOutBuffer *released;
 		audoutWaitPlayFinish(&released, &cnt, U64_MAX); // Wait for playback to finish of current buffers, get a count of how many are available.
 
