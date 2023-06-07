@@ -99,7 +99,7 @@ void playback_thread_main(void *) { // Main playback thread
 		rdata[i] = (u32 *)memalign(0x1000, rdata_size); // Allocate 4kb of aligned memory for each buffer
 		memset(rdata[i], 0, rdata_size); // Clear this buffer
 		sources[i].next = 0; 
-		sources[i].buffer = rdata[i]; // Also clear and set the size of the audio output buffers. These are *not* padded.
+		sources[i].buffer = rdata[i]; // Also clear and set the size of the audio output buffers.
 		sources[i].buffer_size = rdata_size; 
 		sources[i].data_size = AUDIO_BUFFER_SAMPLES * sizeof(u32);
 		sources[i].data_offset = 0;
